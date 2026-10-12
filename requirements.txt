@@ -1,0 +1,8 @@
+fastapi==0.142.3
+uvicorn[standard]==0.53.0
+httpx==0.28.1
+guessit==4.4.0
+pillow==12.3.0
+# yt-dlp bewusst ungepinnt – YouTube ändert sich ständig; Image regelmäßig neu bauen.
+# [default] bringt yt-dlp-ejs mit (Skripte für YouTubes JS-Prüfungen, braucht Deno, siehe Dockerfile)
+yt-dlp[default]

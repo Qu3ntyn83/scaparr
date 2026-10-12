@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1f26">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scraparr">
+<title>Scraparr</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23e0a23a'/><path d='M22 11.5c0-2-2.4-3.5-6-3.5s-6 1.5-6 3.6c0 4.6 12 2.4 12 7.2 0 2.1-2.6 3.7-6.2 3.7-3.5 0-5.8-1.5-5.8-3.5' stroke='%23181a1f' stroke-width='3' fill='none' stroke-linecap='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">S</span>Scraparr<small title="Version {{VERSION}}">v{{VERSION}} · TMDB · Deutsch</small></div>
+  <nav class="tabs">
+    <button data-view="movies" class="active">Filme <span class="count" id="cnt-movies"></span></button>
+    <button data-view="shows">Serien <span class="count" id="cnt-shows"></span></button>
+    <button data-view="sets">Kollektionen <span class="count" id="cnt-sets"></span></button>
+    <button data-view="sync">Abgleich <span class="count" id="cnt-sync"></span></button>
+    <button data-view="log">Protokoll</button>
+    <button data-view="settings">Einstellungen</button>
+  </nav>
+  <div class="job" id="job">
+    <div class="job-idle" id="job-idle">
+      <span class="dot"></span><span id="job-next">Bereit</span>
+    </div>
+    <div class="job-run hidden" id="job-run">
+      <div class="job-text"><b id="job-name"></b><span id="job-current"></span></div>
+      <div class="bar"><i id="job-bar"></i></div>
+      <button class="icon-btn" id="job-cancel" title="Abbrechen">✕</button>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="btn ghost" id="btn-scan" title="Bibliotheken neu einlesen">⟳<span class="lbl"> Scannen</span></button>
+    <button class="btn" id="btn-auto" title="Scan + neue Titel scrapen + Emby aktualisieren">▶<span class="lbl"> Auto-Lauf</span></button>
+  </div>
+</header>
+
+<div class="banner hidden" id="no-key">
+  Kein TMDB-API-Key hinterlegt. <a href="#" data-goto="settings">Jetzt in den Einstellungen eintragen →</a>
+</div>
+
+<!-- ===================== Bibliothek (Filme/Serien) ===================== -->
+<main id="view-library" class="library">
+  <section class="list-pane">
+    <div class="toolbar">
+      <input type="search" id="filter-text" placeholder="Suchen …  (Titel, Ordner)">
+      <select id="filter-status">
+        <option value="">Alle</option>
+        <option value="neu">Neu</option>
+        <option value="manuell">Manuell prüfen</option>
+        <option value="fehler">Fehler</option>
+        <option value="gescrapt">Gescrapt</option>
+        <option value="incomplete">Unvollständig</option>
+      </select>
+    </div>
+    <div class="toolbar sub">
+      <label class="chk"><input type="checkbox" id="sel-all"> <span id="sel-count">0 ausgewählt</span></label>
+      <div class="grow"></div>
+      <button class="btn small" id="btn-scrape" title="Ausgewählte (oder alle offenen) scrapen">Scrapen</button>
+      <button class="btn small ghost" id="btn-rescrape" title="Ausgewählte komplett neu scrapen, Artwork überschreiben">Neu scrapen</button>
+      <button class="btn small ghost" id="btn-rename">Umbenennen</button>
+      <button class="btn small ghost hidden" id="btn-themes" title="Titelmelodien für ausgewählte (oder alle) Serien ohne Theme laden">♪ Themes</button>
+    </div>
+    <div class="table-wrap">
+      <table class="list" id="list">
+        <thead><tr>
+          <th class="c-chk"></th>
+          <th class="c-title" data-sort="title">Titel</th>
+          <th class="c-year" data-sort="year">Jahr</th>
+          <th class="c-fsk" data-sort="fsk">FSK</th>
+          <th class="c-ic" title="NFO">NFO</th>
+          <th class="c-ic" title="Poster">Pos</th>
+          <th class="c-ic" title="Fanart">Fan</th>
+          <th class="c-ic" title="Trailer">Trl</th>
+          <th class="c-ic c-theme hidden" title="Titelmelodie (theme.mp3)">Thm</th>
+          <th class="c-ep hidden" title="Episoden gescrapt / gesamt">Ep.</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty hidden" id="list-empty"></div>
+    </div>
+  </section>
+  <section class="detail-pane" id="detail">
+    <div class="placeholder">Titel links auswählen</div>
+  </section>
+</main>
+
+<!-- ===================== Protokoll ===================== -->
+<main id="view-sets" class="page hidden">
+  <div class="page-head">
+    <h2>Kollektionen</h2>
+    <input type="search" id="sets-filter" placeholder="Suchen …">
+    <select id="sets-mode">
+      <option value="">Alle</option>
+      <option value="incomplete">Unvollständig</option>
+      <option value="complete">Vollständig</option>
+      <option value="noemby">Noch nicht in Emby</option>
+    </select>
+    <div class="grow"></div>
+    <button class="btn small ghost" id="sets-refresh" title="Namen, Texte und Bilder aller Reihen neu von TMDB laden">⟳ Von TMDB laden</button>
+    <button class="btn small" id="sets-emby" title="Kollektionen in Emby anlegen bzw. aktualisieren">Nach Emby übertragen</button>
+  </div>
+  <div class="hint" id="sets-info"></div>
+  <div class="sets-grid" id="sets-grid"></div>
+</main>
+
+<dialog id="dlg-set" class="dlg wide">
+  <form method="dialog" class="dlg-head"><h3 id="set-title">Kollektion</h3><button class="icon-btn">✕</button></form>
+  <div class="dlg-body" id="set-body"></div>
+</dialog>
+
+<main id="view-sync" class="page hidden">
+  <div class="page-head"><h2>Abgleich</h2><span class="hint">Emby · Radarr · Sonarr – Pfade, IDs, Episodennummern, Darstellung in Emby</span></div>
+  <div id="sync-cards"></div>
+</main>
+
+<main id="view-log" class="page hidden">
+  <div class="page-head">
+    <h2>Protokoll</h2>
+    <select id="log-level"><option value="">Alle</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
+    <div class="grow"></div>
+    <button class="btn small ghost" id="log-clear">Leeren</button>
+  </div>
+  <div class="log" id="log"></div>
+</main>
+
+<!-- ===================== Einstellungen ===================== -->
+<main id="view-settings" class="page hidden">
+  <form id="settings" class="settings" autocomplete="off">
+    <div class="page-head"><h2>Einstellungen</h2><div class="grow"></div>
+      <button class="btn" type="submit">Speichern</button></div>
+
+    <fieldset><legend>TMDB</legend>
+      <label>API-Key oder Lesezugriffs-Token
+        <input name="tmdb_api_key" type="password" placeholder="themoviedb.org → Einstellungen → API">
+      </label>
+      <div class="row"><button class="btn small ghost" type="button" id="test-tmdb">Verbindung testen</button><span class="hint" id="test-tmdb-res"></span></div>
+      <div class="cols3">
+        <label>Sprache <input name="language" placeholder="de-DE"></label>
+        <label>Ersatzsprache <input name="fallback_language" placeholder="en-US"><small>nur wenn kein deutscher Text existiert</small></label>
+        <label>Land (FSK) <input name="country" placeholder="DE"></label>
+      </div>
+      <label>FSK-Format in der NFO <input name="fsk_format" placeholder="FSK-{age}">
+        <small>{age} = Altersstufe. Emby versteht z. B. <code>FSK-12</code> oder <code>DE-12</code>.</small></label>
+    </fieldset>
+
+    <fieldset><legend>Weitere Quellen</legend>
+      <div class="src-grid">
+        <div class="src">
+          <div class="src-h"><b>TheTVDB</b><span>Deutsche Episodentitel, DVD-/absolute Reihenfolge, Serien-Artwork</span></div>
+          <div class="cols2">
+            <label>API-Key <input name="tvdb_api_key" type="password" placeholder="thetvdb.com → Dashboard → API Keys"></label>
+            <label>PIN <input name="tvdb_pin" type="password" placeholder="nur bei Abo-Keys"></label>
+          </div>
+          <div class="row"><button class="btn small ghost" type="button" data-test="tvdb">Testen</button><span class="hint" data-res="tvdb"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>fanart.tv</b><span>Logos, Clearart, Disc, Banner, Landscape, Staffelposter</span></div>
+          <div class="cols2">
+            <label>Projekt-API-Key <input name="fanart_api_key" type="password" placeholder="fanart.tv → Profil → API"></label>
+            <label>Persönlicher Key <input name="fanart_client_key" type="password" placeholder="optional, schnellere Bilder"></label>
+          </div>
+          <div class="row"><button class="btn small ghost" type="button" data-test="fanart">Testen</button><span class="hint" data-res="fanart"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>OMDb</b><span>IMDb-Wertung, Rotten Tomatoes, Metacritic</span></div>
+          <label>API-Key <input name="omdb_api_key" type="password" placeholder="omdbapi.com/apikey.aspx (Free: 1.000/Tag)"></label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="omdb">Testen</button><span class="hint" data-res="omdb"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>OFDb</b><span>FSK der deutschen Fassungen (Kino bevorzugt), deutsche Inhaltsangaben – ohne Key</span></div>
+          <label class="chk"><input type="checkbox" name="ofdb_enabled"> Aktiv</label>
+          <label class="chk"><input type="checkbox" name="plot_fallback_ofdb"> OFDb-Inhaltsangabe statt englischem TMDB-Text</label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="ofdb">Testen</button><span class="hint" data-res="ofdb"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>Trakt</b><span>Deutsche Übersetzungen für Filme, Serien und einzelne Episoden</span></div>
+          <label>Client-ID <input name="trakt_client_id" type="password" placeholder="trakt.tv/oauth/applications → New Application"></label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="trakt">Testen</button><span class="hint" data-res="trakt"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>fernsehserien.de</b><span>Deutsche Episodentitel und -inhalte aus dem deutschen TV – ohne Key, 1 Anfrage/s</span></div>
+          <label class="chk"><input type="checkbox" name="fernsehserien_enabled"> Aktiv</label>
+          <label class="chk"><input type="checkbox" name="fernsehserien_plots"> Auch Episodeninhalte übernehmen</label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="fernsehserien">Testen</button><span class="hint" data-res="fernsehserien"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>Anime-Zuordnung</b><span>Fribb/anime-lists: AniDB/AniList/MAL ↔ TMDB/TVDB inkl. Staffel und Versatz – ohne Key, wöchentlich</span></div>
+          <label class="chk"><input type="checkbox" name="animelists_enabled"> Aktiv</label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="animelists">Testen</button><span class="hint" data-res="animelists"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>Wikidata</b><span>FSK-Freigabe und OFDb-Zuordnung (ohne Key)</span></div>
+          <label class="chk"><input type="checkbox" name="wikidata_enabled"> Aktiv <small>(nötig, damit OFDb Filme findet)</small></label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="wikidata">Testen</button><span class="hint" data-res="wikidata"></span></div>
+        </div>
+      </div>
+      <div class="cols2">
+        <label>FSK-Reihenfolge <select name="fsk_order">
+          <option value="ofdb,tmdb,wikidata">OFDb → TMDB → Wikidata</option>
+          <option value="ofdb,wikidata,tmdb">OFDb → Wikidata → TMDB</option>
+          <option value="tmdb,ofdb,wikidata">TMDB → OFDb → Wikidata</option>
+          <option value="wikidata,ofdb,tmdb">Wikidata → OFDb → TMDB</option>
+          <option value="tmdb">nur TMDB</option></select></label>
+        <label>Hauptwertung in Emby <select name="rating_default">
+          <option value="imdb">IMDb (via OMDb)</option><option value="tmdb">TMDB</option></select></label>
+      </div>
+      <div class="cols2">
+        <label>Artwork-Quellen (bei gleicher Sprache) <select name="artwork_order">
+          <option value="tmdb,fanart,tvdb">TMDB → fanart.tv → TVDB</option>
+          <option value="fanart,tmdb,tvdb">fanart.tv → TMDB → TVDB</option>
+          <option value="tvdb,tmdb,fanart">TVDB → TMDB → fanart.tv</option></select>
+          <small>Deutsch schlägt immer jede Quelle; Hintergründe bevorzugt textlos.</small></label>
+        <label class="chk inline"><input type="checkbox" name="download_extra_art"> Zusatz-Artwork laden (Clearart, Disc, Banner, Landscape)</label>
+      </div>
+      <div class="cols2">
+        <label>Episoden-Quelle <select name="tv_episode_source">
+          <option value="tmdb">TMDB (fehlende deutsche Texte: TVDB → Trakt → fernsehserien.de)</option>
+          <option value="tvdb">TVDB</option></select></label>
+        <label>Episoden-Reihenfolge (nur TVDB) <select name="tv_episode_order">
+          <option value="default">Ausstrahlung</option><option value="dvd">DVD</option>
+          <option value="absolute">Absolut (Anime)</option></select></label>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>Kollektionen</legend>
+      <label class="chk"><input type="checkbox" name="collections_enabled"> Filmreihen von TMDB laden (deutsche Namen, Texte, Poster)</label>
+      <div class="cols2">
+        <label>Kollektion ab <input name="collection_min_movies" type="number" min="1" max="10"><small>eigenen Filmen einer Reihe anlegen</small></label>
+        <label class="chk inline"><input type="checkbox" name="collections_to_emby"> In Emby anlegen und aktuell halten</label>
+      </div>
+      <label>Bilder zusätzlich in Ordner ablegen (optional) <input name="collection_art_folder" placeholder="/media/filme/_Kollektionen">
+        <small>Für Kodi/tMM-„Movie Set“-Ordner: je Reihe <code>&lt;Name&gt;/poster.jpg</code> und <code>fanart.jpg</code>. Für Emby nicht nötig.</small></label>
+    </fieldset>
+
+    <fieldset><legend>Bibliotheken</legend>
+      <label>Filme (mehrere mit ; trennen) <input name="movie_paths" placeholder="/media/filme"></label>
+      <label>Serien (mehrere mit ; trennen) <input name="tv_paths" placeholder="/media/serien"></label>
+      <label>Serien-Unterordner ignorieren <input name="tv_ignore_folders" placeholder="!Unsortiert!, Downloads">
+        <small>Kommagetrennte Ordnernamen. Genre-/Kategorie-Ordner (z. B. „09 - Action“) werden automatisch erkannt und durchsucht – nur Sammelordner mit gemischten Einzeldateien hier eintragen.</small></label>
+    </fieldset>
+
+    <fieldset><legend>Artwork</legend>
+      <div class="cols2">
+        <label>Postergröße <select name="poster_size"><option>original</option><option>w780</option><option>w500</option></select></label>
+        <label>Fanart-Größe <select name="fanart_size"><option>original</option><option>w1280</option></select></label>
+      </div>
+      <label class="chk"><input type="checkbox" name="download_logo"> Clearlogo laden (deutsch bevorzugt)</label>
+      <label class="chk"><input type="checkbox" name="download_season_posters"> Staffelposter laden</label>
+      <label class="chk"><input type="checkbox" name="download_tv_themes"> Titelmelodie für Serien laden (<code>theme.mp3</code>, Quelle: Plex) – vorhandene werden nie überschrieben</label>
+      <label class="chk"><input type="checkbox" name="download_episode_thumbs"> Episodenbilder laden</label>
+      <label class="chk"><input type="checkbox" name="download_actor_images"> Schauspielerbilder in <code>.actors/</code> speichern</label>
+      <label class="chk"><input type="checkbox" name="overwrite_artwork"> Vorhandenes Artwork immer überschreiben</label>
+    </fieldset>
+
+    <fieldset><legend>Trailer</legend>
+      <label>Modus <select name="trailer_mode">
+        <option value="download">Deutschen Trailer herunterladen (yt-dlp) + Link in NFO</option>
+        <option value="nfo">Nur YouTube-Link in die NFO</option>
+        <option value="off">Aus</option></select></label>
+      <div class="cols2">
+        <label>Maximale Auflösung <select name="trailer_max_height"><option value="2160">2160p</option><option value="1080">1080p</option><option value="720">720p</option></select></label>
+        <label class="chk inline"><input type="checkbox" name="trailer_fallback_en"> Englischen Trailer nehmen, wenn kein deutscher existiert</label>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>Automatischer Lauf</legend>
+      <label class="chk"><input type="checkbox" name="auto_enabled"> Aktiv</label>
+      <label>Intervall (Minuten) <input name="auto_interval_min" type="number" min="5" step="5"></label>
+      <label class="chk"><input type="checkbox" name="auto_scrape_new"> Neue Titel automatisch scrapen <small>(nur eindeutige Treffer; der Rest landet unter „Manuell prüfen“)</small></label>
+      <label class="chk"><input type="checkbox" name="auto_rename"> Nach dem Scrapen automatisch umbenennen</label>
+    </fieldset>
+
+    <fieldset><legend>Umbenennen</legend>
+      <label>Filmordner <input name="rename_movie_folder" class="mono"></label>
+      <label>Filmdatei <input name="rename_movie_file" class="mono"></label>
+      <label>Episodendatei <input name="rename_episode_file" class="mono"></label>
+      <small>Platzhalter: <code>{title}</code> <code>{original_title}</code> <code>{year}</code> <code>{fsk}</code> <code>{tmdb_id}</code> · Serien: <code>{showtitle}</code> <code>{eps}</code> (S01E01E02) <code>{season:02d}</code> <code>{episode:02d}</code> <code>{title}</code></small>
+    </fieldset>
+
+    <fieldset><legend>Emby</legend>
+      <div class="cols2">
+        <label>Server-URL <input name="emby_url" placeholder="http://192.168.1.10:8096"></label>
+        <label>API-Key <input name="emby_api_key" type="password" placeholder="Emby → Erweitert → API-Schlüssel"></label>
+      </div>
+      <div class="cols2">
+        <label class="chk inline"><input type="checkbox" name="emby_refresh_after_job"> Emby nach Änderungen aktualisieren</label>
+        <label>Art der Aktualisierung <select name="emby_refresh_mode">
+          <option value="item">Nur geänderte Titel neu einlesen (empfohlen)</option>
+          <option value="library">Ganze Bibliothek scannen</option></select></label>
+      </div>
+      <label>Pfadzuordnung <textarea name="emby_path_map" rows="2" class="mono" placeholder="/mnt/medien/filme => /media/filme"></textarea>
+        <small>Nur nötig, wenn Emby die Dateien unter anderen Pfaden sieht als Scraparr. Eine Zeile je Zuordnung: <code>Pfad bei Emby =&gt; Pfad hier</code></small></label>
+      <div class="row"><button class="btn small ghost" type="button" id="test-emby">Verbindung testen</button><span class="hint" id="test-emby-res"></span></div>
+    </fieldset>
+
+    <fieldset><legend>Radarr &amp; Sonarr</legend>
+      <div class="src-grid">
+        <div class="src">
+          <div class="src-h"><b>Radarr</b><span>Filme: TMDB-IDs, Import-/Umbenennungs-Webhooks</span></div>
+          <label>URL <input name="radarr_url" placeholder="http://192.168.1.20:7878"></label>
+          <label>API-Key <input name="radarr_api_key" type="password" placeholder="Radarr → Settings → General"></label>
+          <label>Pfadzuordnung <textarea name="radarr_path_map" rows="2" class="mono" placeholder="/movies => /media/filme"></textarea></label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="radarr">Testen</button><span class="hint" data-res="radarr"></span></div>
+        </div>
+        <div class="src">
+          <div class="src-h"><b>Sonarr</b><span>Serien: TVDB/TMDB-IDs, Episodennummern, Webhooks</span></div>
+          <label>URL <input name="sonarr_url" placeholder="http://192.168.1.20:8989"></label>
+          <label>API-Key <input name="sonarr_api_key" type="password" placeholder="Sonarr → Settings → General"></label>
+          <label>Pfadzuordnung <textarea name="sonarr_path_map" rows="2" class="mono" placeholder="/tv => /media/serien"></textarea></label>
+          <div class="row"><button class="btn small ghost" type="button" data-test="sonarr">Testen</button><span class="hint" data-res="sonarr"></span></div>
+        </div>
+      </div>
+      <label class="chk"><input type="checkbox" name="arr_auto_ids"> Offene oder unklare Titel automatisch mit der ID aus Radarr/Sonarr zuordnen</label>
+      <label class="chk"><input type="checkbox" name="sonarr_episode_numbers"> Nicht erkannte Episoden mit Sonarrs Nummerierung versehen</label>
+      <div class="webhooks">
+        <b>Webhooks</b> <small>In Radarr/Sonarr unter <i>Settings → Connect → + → Webhook</i> eintragen, Ereignisse <i>On File Import</i>, <i>On File Upgrade</i> und <i>On Rename</i> aktivieren, Methode POST.</small>
+        <div class="hook"><span>Radarr</span><code id="hook-radarr">–</code><button class="btn small ghost" type="button" data-copy="hook-radarr">Kopieren</button></div>
+        <div class="hook"><span>Sonarr</span><code id="hook-sonarr">–</code><button class="btn small ghost" type="button" data-copy="hook-sonarr">Kopieren</button></div>
+        <label>Sammelzeit (Sekunden) <input name="webhook_delay_sec" type="number" min="5" step="5"><small>Wartet nach dem letzten Webhook, damit ganze Staffelpakete in einem Rutsch verarbeitet werden.</small></label>
+      </div>
+    </fieldset>
+  </form>
+</main>
+
+<!-- ===================== Dialoge ===================== -->
+<dialog id="dlg-search" class="dlg wide">
+  <form method="dialog" class="dlg-head"><h3>Suchen &amp; Zuordnen</h3><button class="icon-btn">✕</button></form>
+  <div class="dlg-body">
+    <div class="search-row">
+      <input id="s-query" placeholder="Titel, TMDB-ID oder IMDb-ID (tt…)">
+      <input id="s-year" type="number" placeholder="Jahr" class="year">
+      <button class="btn" id="s-go">Suchen</button>
+    </div>
+    <div class="file-hint mono" id="s-file"></div>
+    <div class="results" id="s-results"></div>
+  </div>
+</dialog>
+
+<dialog id="dlg-art" class="dlg wide">
+  <form method="dialog" class="dlg-head"><h3>Bild auswählen</h3><button class="icon-btn">✕</button></form>
+  <div class="dlg-body">
+    <div class="ap-tabs" id="ap-tabs"></div>
+    <div class="ap-grid" id="ap-grid"></div>
+    <div class="ap-foot">
+      <input id="ap-url" placeholder="oder eigene Bild-URL (https://…)">
+      <button class="btn ghost" id="ap-url-go" type="button">Übernehmen</button>
+      <button class="btn ghost hidden" id="ap-auto" type="button" title="Beim nächsten Neu-Scrapen wieder automatisch wählen">Automatisch wählen</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-edit" class="dlg">
+  <form method="dialog" class="dlg-head"><h3>Metadaten bearbeiten</h3><button class="icon-btn">✕</button></form>
+  <form class="dlg-body form" id="edit-form">
+    <label>Titel <input name="title"></label>
+    <label>Originaltitel <input name="original_title"></label>
+    <div class="cols3">
+      <label>Sortiertitel <input name="sorttitle"></label>
+      <label>Jahr <input name="year" type="number"></label>
+      <label>FSK <select name="fsk"><option value="">–</option><option>0</option><option>6</option><option>12</option><option>16</option><option>18</option></select></label>
+    </div>
+    <label>Tagline <input name="tagline"></label>
+    <label>Genres (Komma-getrennt) <input name="genres"></label>
+    <label>Handlung <textarea name="plot" rows="7"></textarea></label>
+    <div class="dlg-foot"><button class="btn" type="submit">Speichern &amp; NFO schreiben</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-rename" class="dlg wide">
+  <form method="dialog" class="dlg-head"><h3>Umbenennen – Vorschau</h3><button class="icon-btn">✕</button></form>
+  <div class="dlg-body">
+    <div class="rename-list" id="rn-list"></div>
+    <div class="dlg-foot"><span class="hint" id="rn-info"></span><button class="btn" id="rn-apply">Umbenennen</button></div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

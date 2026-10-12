@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.venv/
+.DS_Store
+docker-compose.yml

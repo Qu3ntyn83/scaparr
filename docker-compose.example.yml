@@ -1,0 +1,40 @@
+services:
+  scraparr:
+    build:
+      context: .
+      args:
+        PUID: 1000      # uid aus den CIFS-Mount-Optionen (findmnt -no OPTIONS /srv/media/filme)
+        PGID: 1000      # gid aus den CIFS-Mount-Optionen
+    image: scraparr:latest
+    container_name: scraparr
+    restart: unless-stopped
+    ports:
+      - "8585:8585"
+    environment:
+      TZ: Europe/Berlin
+      TMDB_API_KEY: ""                   # oder später in der Web-UI eintragen
+      TVDB_API_KEY: ""                   # optional
+      FANART_API_KEY: ""                 # optional
+      OMDB_API_KEY: ""                   # optional
+      TRAKT_CLIENT_ID: ""                # optional
+      MOVIE_PATHS: /media/filme
+      TV_PATHS: /media/serien
+      EMBY_URL: http://192.168.1.10:8096
+      EMBY_API_KEY: ""
+      # EMBY_PATH_MAP: "/mnt/medien/filme => /media/filme"
+      RADARR_URL: ""                     # z. B. http://192.168.1.20:7878
+      RADARR_API_KEY: ""
+      # RADARR_PATH_MAP: "/movies => /media/filme"
+      SONARR_URL: ""                     # z. B. http://192.168.1.20:8989
+      SONARR_API_KEY: ""
+      # SONARR_PATH_MAP: "/tv => /media/serien"
+      AUTO_INTERVAL_MIN: "60"
+      # Optional Login für die Web-UI:
+      # WEB_USER: admin
+      # WEB_PASS: geheim
+    volumes:
+      - ./data:/data
+      # Pfade im Container sollten gleich sein wie im Emby-Container – dann passt alles 1:1
+      # :rslave hilft, wenn die Freigaben per systemd-Automount (CIFS/NFS) eingehängt werden
+      - /srv/media/filme:/media/filme:rslave
+      - /srv/media/serien:/media/serien:rslave
