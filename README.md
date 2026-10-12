@@ -147,6 +147,11 @@ docker compose up -d --build
 
 yt-dlp veraltet schnell: Schlägt der Trailer-Download fehl, einmal `docker compose build --no-cache` ausführen.
 
+**„Sign in to confirm you're not a bot"**: YouTube blockt Server-IPs gelegentlich. Dann Cookies eines angemeldeten
+Browsers bereitstellen: mit einer Erweiterung wie „Get cookies.txt LOCALLY" die Cookies von youtube.com im
+Netscape-Format exportieren (am besten aus einem privaten Fenster, mit einem Zweitkonto) und als
+`./data/cookies.txt` ablegen (oder den Pfad in den Einstellungen eintragen). Scraparr nutzt eine Kopie davon.
+
 Web-UI: `http://<host>:8585`
 
 1. **Einstellungen** → TMDB-API-Key eintragen (Pflicht); TVDB, fanart.tv und OMDb optional, jeweils mit *Testen* prüfen (themoviedb.org → Konto → Einstellungen → API; v3-Key

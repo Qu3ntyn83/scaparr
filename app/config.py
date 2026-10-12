@@ -48,6 +48,7 @@ DEFAULTS = {
     "trailer_mode": os.environ.get("TRAILER_MODE", "download"),  # off | nfo | download
     "trailer_fallback_en": False,      # wenn kein deutscher Trailer existiert, englischen nehmen
     "trailer_max_height": 1080,
+    "trailer_cookies": "",             # Pfad zu cookies.txt (Netscape-Format); leer = /data/cookies.txt, falls vorhanden
     # Automatik
     "auto_enabled": os.environ.get("AUTO_ENABLED", "true").lower() == "true",
     "auto_interval_min": int(os.environ.get("AUTO_INTERVAL_MIN", "60")),

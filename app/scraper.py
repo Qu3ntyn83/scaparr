@@ -208,6 +208,17 @@ def download_trailer(trailer, dest, force=False):
     cmd = [ytdlp, "-q", "--no-playlist", "--no-progress", "--js-runtimes", "deno",
            "-f", f"bv*[height<={h}][ext=mp4]+ba[ext=m4a]/b[height<={h}][ext=mp4]/b",
            "--merge-output-format", "mp4", "-o", tmp, "--force-overwrites", trailer["url"]]
+    cookies = config.get("trailer_cookies").strip() or os.path.join(db.DATA_DIR, "cookies.txt")
+    ctmp = None
+    if os.path.isfile(cookies):
+        try:    # Kopie nutzen: yt-dlp schreibt die Datei zurück, die Quelle kann schreibgeschützt sein
+            fd, ctmp = tempfile.mkstemp(prefix=".cookies-", suffix=".txt")
+            os.close(fd)
+            shutil.copyfile(cookies, ctmp)
+            cmd[1:1] = ["--cookies", ctmp]
+        except OSError as e:
+            db.log("WARN", f"Cookie-Datei nicht lesbar: {cookies}: {e}")
+            ctmp = None
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
         if p.returncode == 0 and os.path.exists(tmp):
@@ -219,9 +230,16 @@ def download_trailer(trailer, dest, force=False):
         msg = errs[-1] if errs else p.stderr.strip()[-300:]
         if not shutil.which("deno"):
             msg += " (Deno fehlt – Image mit aktuellem Dockerfile neu bauen)"
+        if "not a bot" in msg or "Sign in" in msg:
+            msg = ("YouTube verlangt eine Anmeldung (Bot-Schutz). Abhilfe: cookies.txt aus dem Browser exportieren "
+                   "und als /data/cookies.txt ablegen – siehe README") + (
+                   " [Cookies wurden verwendet, sind evtl. abgelaufen]" if ctmp else "")
         db.log("WARN", f"Trailer-Download fehlgeschlagen ({trailer['url']}): {msg}")
     except subprocess.TimeoutExpired:
         db.log("WARN", f"Trailer-Download Zeitüberschreitung: {trailer['url']}")
+    finally:
+        if ctmp and os.path.exists(ctmp):
+            os.remove(ctmp)
     _clean_partials(dest)
     return False
 
