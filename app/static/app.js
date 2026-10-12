@@ -253,11 +253,23 @@ function renderDetail(d) {
         <div class="file">${dot(d.has_fanart)} Fanart</div><div class="file">${dot(d.has_trailer)} Trailer</div>
         ${movie ? "" : `<div class="file">${dot(d.has_theme)} Titelmelodie</div>`}
       </div>
+      ${movie && d.part_files?.length > 1 ? renderParts(d) : ""}
       ${d.meta ? renderArtStrip(d, files) : ""}
       <h4>Details</h4><dl class="kv">${people}</dl>
       ${cast ? `<h4>Besetzung</h4><div class="cast">${cast}</div>` : ""}
       ${movie ? "" : renderEpisodes(d)}
     </div>`;
+}
+
+function renderParts(d) {
+  const rel = (p) => p.startsWith(d.folder + "/") ? p.slice(d.folder.length + 1) : p;
+  const list = d.part_files.map((p, i) => `<li><span class="mono">${esc(rel(p))}</span>${d.stack_plan ? ` <span class="muted">→ ${esc(d.stack_plan[i])}</span>` : ""}</li>`).join("");
+  return `<div class="parts ${d.stack_ok ? "ok" : "todo"}">
+    <div class="parts-h"><b>Mehrteiliger Film · ${d.part_files.length} Teile</b>
+      <span>${d.stack_ok ? `${SRV()} zeigt die Teile als einen Film.` : `So erkennt ${SRV()} die Teile noch nicht als einen Film.`}</span></div>
+    <ol>${list}</ol>
+    ${d.stack_ok ? "" : `<button class="btn small" data-act="stack">Für ${SRV()} zusammenführen</button>`}
+  </div>`;
 }
 
 // ------------------------------------------------------------ Artwork-Auswahl
@@ -404,6 +416,7 @@ $("#detail").addEventListener("click", (e) => {
   if (a === "back") return closeDetailPage();
   if (a === "search") openSearch();
   if (a === "art") openArt(b.dataset.kind);
+  if (a === "stack") runJob("/api/movies/stack", { ids: [S.detail.id] });
   if (a === "edit") openEdit();
   if (a === "rescrape") runJob(`${base()}/scrape`, { ids: [S.detail.id], force: true });
   if (a === "rename") openRename([S.detail.id]);
@@ -497,7 +510,7 @@ async function openRename(ids) {
   const body = S.view === "movies" ? { movie_ids: ids } : { show_ids: ids };
   try {
     const plans = await api("POST", "/api/rename/preview", body);
-    $("#rn-list").innerHTML = plans.length ? plans.map((p) => `<div class="rn"><div class="o">${esc(p.old)}</div><div class="n${p.conflict ? " bad" : ""}">${esc(p.new)}${p.conflict ? ` — ${esc(p.conflict)}, wird übersprungen` : ""}</div></div>`).join("")
+    $("#rn-list").innerHTML = plans.length ? plans.map((p) => `<div class="rn"><div class="o">${esc(p.old)}</div><div class="n${p.conflict ? " bad" : ""}">${esc(p.new)}${p.parts?.length > 1 ? ` <span class="muted">(+ ${p.parts.length - 1} weitere${p.parts.length > 2 ? "" : "r"} Teil)</span>` : ""}${p.conflict ? ` — ${esc(p.conflict)}, wird übersprungen` : ""}</div></div>`).join("")
       : `<div class="hint">Alles schon korrekt benannt (oder noch nicht gescrapt).</div>`;
     const okN = plans.filter((p) => !p.conflict).length;
     $("#rn-info").textContent = plans.length ? `${okN} von ${plans.length} Datei(en) – NFO, Bilder, Untertitel und Trailer wandern mit.` : "";

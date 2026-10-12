@@ -7,8 +7,40 @@ def stem(path):
     return os.path.splitext(path)[0]
 
 
+def _part_layout(path):
+    """Mehrteiler: (Filmordner, Stamm ohne Teilangabe, ist_teil). Film/CD1/x.avi -> Ordner "Film"."""
+    from . import parser
+    folder = os.path.dirname(path)
+    in_cd_dir = bool(parser.CD_DIR.match(os.path.basename(folder)))
+    if in_cd_dir:
+        folder = os.path.dirname(folder)
+    s = stem(os.path.basename(path))
+    ms = list(parser.PART_TOKEN.finditer(s))
+    # nur echte Teilangaben: cd/dvd/disc/disk überall, part/pt nur am Namensende ("Part.1.2010" bleibt Titel)
+    real = bool(ms) and (ms[-1].group(1).lower() in ("cd", "dvd", "disc", "disk") or ms[-1].end() == len(s))
+    base = parser.part_info(s)[0] if real else s
+    return folder, base, real or in_cd_dir
+
+
 def movie_files(path, single_folder):
     folder, base = os.path.dirname(path), stem(path)
+    pfolder, pbase, is_part = _part_layout(path)
+    if is_part and single_folder:
+        # Mehrteiliger Film im eigenen Ordner: Emby/Jellyfin/Kodi lesen movie.nfo und Bilder im Filmordner,
+        # Trailer in trailers/, damit er nicht als weiterer Teil gilt
+        return {
+            "nfo": os.path.join(pfolder, "movie.nfo"),
+            "poster": os.path.join(pfolder, "poster.jpg"),
+            "fanart": os.path.join(pfolder, "fanart.jpg"),
+            "logo": os.path.join(pfolder, "clearlogo.png"),
+            "clearart": os.path.join(pfolder, "clearart.png"),
+            "discart": os.path.join(pfolder, "disc.png"),
+            "banner": os.path.join(pfolder, "banner.jpg"),
+            "landscape": os.path.join(pfolder, "landscape.jpg"),
+            "trailer": os.path.join(pfolder, "trailers", "trailer.mp4"),
+        }
+    if is_part and pbase:
+        base = os.path.join(pfolder, pbase)        # gemischter Ordner: Film.nfo statt Film-cd1.nfo
     if single_folder:
         return {
             "nfo": base + ".nfo",
@@ -60,8 +92,11 @@ def episode_files(path):
 def movie_status(path, single_folder):
     f = movie_files(path, single_folder)
     folder, base = os.path.dirname(path), stem(path)
+    pfolder, _, is_part = _part_layout(path)
+    if is_part:
+        folder = pfolder
     ex = os.path.exists
-    has_trailer = any(glob.glob(glob.escape(base) + "-trailer.*"))
+    has_trailer = any(glob.glob(glob.escape(base) + "-trailer.*")) or ex(f["trailer"])
     if single_folder:
         has_trailer = has_trailer or os.path.isdir(os.path.join(folder, "trailers")) \
             and bool(os.listdir(os.path.join(folder, "trailers")))
@@ -79,8 +114,10 @@ def existing_movie_nfo(path, single_folder):
     f = movie_files(path, single_folder)["nfo"]
     if os.path.exists(f):
         return f
-    alt = os.path.join(os.path.dirname(path), "movie.nfo")
-    return alt if single_folder and os.path.exists(alt) else None
+    for alt in (stem(path) + ".nfo", os.path.join(_part_layout(path)[0], "movie.nfo")):
+        if os.path.exists(alt) and (single_folder or alt.startswith(stem(path))):
+            return alt
+    return None
 
 
 def theme_file(folder):

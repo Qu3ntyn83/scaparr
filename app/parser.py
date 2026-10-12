@@ -35,12 +35,33 @@ def strip_ids(text):
     return ID_TAG.sub("", IMDB_RE.sub("", text or ""))
 
 
+# Mehrteilige Filme (2 CDs): "Film-cd1", "Film.CD2.German", "Film (Disc 1)", "Film part1"
+PART_TOKEN = re.compile(r"(?:^|[-_. ]*[\[(]\s*|[-_. ]+)(cd|dvd|disc|disk|part|pt)[-_. ]?([1-9])(?:\s*[\])])?(?=$|[-_. \])])", re.I)
+CD_DIR = re.compile(r"^(?:cd|dvd|disc|disk|part)[-_. ]?([1-9])$", re.I)
+
+
+def part_info(stem):
+    """-> (Stamm ohne Teilangabe, Teilnummer|None). Letzte Teilangabe zählt ("Part.2.CD1" -> CD1)."""
+    ms = list(PART_TOKEN.finditer(stem or ""))
+    if not ms:
+        return stem, None
+    m = ms[-1]
+    rest = (stem[:m.start()] + stem[m.end():]).strip(" -_.")
+    return rest, int(m.group(2))
+
+
+def part_key(stem):
+    """Vergleichsschlüssel: Namen, die sich nur in der Teilangabe unterscheiden, gehören zusammen."""
+    base, n = part_info(stem)
+    return re.sub(r"[^a-z0-9]", "", base.lower()), n
+
+
 def is_video(path: str) -> bool:
     name = os.path.basename(path)
     stem, ext = os.path.splitext(name)
     if ext.lower() not in VIDEO_EXT or name.startswith("."):
         return False
-    if TEMP_FILE.search(stem) or PART_RE.search(stem) or is_extra_stem(stem):
+    if TEMP_FILE.search(stem) or is_extra_stem(stem):
         return False
     return True
 
@@ -99,7 +120,9 @@ def clean_tv_name(name):
 def guess_movie(path: str, single_folder: bool):
     """Titel/Jahr aus Ordnername (bevorzugt, wenn er ein Jahr enthält) oder Dateiname."""
     folder = os.path.basename(os.path.dirname(path))
-    stem = os.path.splitext(os.path.basename(path))[0]
+    if CD_DIR.match(folder):                        # Film/CD1/film.avi -> Ordner "Film" zählt
+        folder = os.path.basename(os.path.dirname(os.path.dirname(path)))
+    stem = part_info(os.path.splitext(os.path.basename(path))[0])[0] or os.path.splitext(os.path.basename(path))[0]
     hints = {}
     for src in (folder if single_folder else "", stem):
         hints.update(id_hints(src))

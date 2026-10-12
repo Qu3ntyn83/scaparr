@@ -149,6 +149,32 @@ def job_scrape_one(kind, rid, tmdb_id):
     return r
 
 
+def job_stack(movie_ids):
+    """Mehrteilige Filme für Emby/Jellyfin zusammenführen: Teile als <Name>-cd1/-cd2 in den Filmordner,
+    NFO als movie.nfo neu schreiben, Server informieren."""
+    from . import nfo, paths
+    state["total"] = len(movie_ids)
+    changed = False
+    for mid in movie_ids:
+        m = db.one("SELECT * FROM movies WHERE id=?", (mid,))
+        p = renamer.plan_stack(m) if m else None
+        if p:
+            p["conflict"] = next((f"Ziel existiert bereits: {os.path.basename(d)}" for s, d in p["parts"]
+                                  if os.path.exists(d) and os.path.normcase(s) != os.path.normcase(d)), None)
+            done, errors = renamer.apply([p])
+            if done:
+                m = db.one("SELECT * FROM movies WHERE id=?", (mid,))
+                if m.get("meta"):
+                    nfo.write_movie(paths.movie_files(m["path"], bool(m["single_folder"]))["nfo"], m["meta"])
+                st = paths.movie_status(m["path"], bool(m["single_folder"]))
+                db.update("movies", mid, **{k: int(v) for k, v in st.items()})
+                emby.touch(m["path"])
+                db.log("INFO", f"Mehrteiler zusammengeführt: {os.path.basename(m['folder'])} ({len(m['part_files'])} Teile)")
+                changed = True
+        _step()
+    return changed
+
+
 def job_rename(plans):
     state["total"] = len(plans)
     done, errors = renamer.apply(plans)

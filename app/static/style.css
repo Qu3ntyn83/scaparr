@@ -442,3 +442,11 @@ fieldset, .src, .src-grid > * { min-width: 0; }
   .art-fanart .art-img, .art-landscape .art-img { width: 170px; }
   .art-banner .art-img { width: 200px; }
 }
+
+/* ---------- Mehrteilige Filme */
+.parts { margin: 12px 0 4px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg2); }
+.parts.todo { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+.parts-h { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13px; }
+.parts-h span { color: var(--muted); }
+.parts ol { margin: 8px 0; padding-left: 22px; font-size: 12.5px; }
+.parts li { margin: 2px 0; word-break: break-all; }

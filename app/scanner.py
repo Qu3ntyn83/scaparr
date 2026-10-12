@@ -58,14 +58,61 @@ def cleanup_extras():
     return removed
 
 
-def _scan_movie_dir(root, dirpath, vids, seen, progress=None):
+def _merge_cd_dirs(found, root):
+    """{ordner: [videos]} -> {ordner: [videos | ("cd", [teil1, teil2])]}.
+    Film/CD1/x.avi + Film/CD2/y.avi werden als ein mehrteiliger Film dem Ordner "Film" zugeschlagen."""
+    out, cds = {}, {}
+    for d, vids in found.items():
+        m = parser.CD_DIR.match(os.path.basename(d))
+        if m and len(vids) == 1 and os.path.normpath(d) != os.path.normpath(root):
+            cds.setdefault(os.path.dirname(d), {})[int(m.group(1))] = vids[0]
+        elif vids:
+            out.setdefault(d, []).extend(vids)
+    for parent, byn in cds.items():
+        if len(byn) >= 2 and not out.get(parent):
+            out[parent] = [("cd", [byn[n] for n in sorted(byn)])]
+        else:
+            for f in byn.values():
+                out.setdefault(os.path.dirname(f), []).append(f)
+    return out
+
+
+def _group_parts(items):
+    """Dateien, die sich nur in der Teilangabe unterscheiden (Film-cd1/Film-cd2), zu einem Film bündeln."""
+    out, byb = [], {}
+    files = _drop_trailers([i for i in items if not isinstance(i, tuple)])
+    for it in items:
+        if isinstance(it, tuple):
+            out.append(it[1])
+    for f in files:
+        base, n = parser.part_key(os.path.splitext(os.path.basename(f))[0])
+        if n is None:
+            out.append([f])
+        else:
+            byb.setdefault(base, {}).setdefault(n, f)
+    for byn in byb.values():
+        if len(byn) >= 2:
+            out.append([byn[n] for n in sorted(byn)])
+        else:
+            out.extend([f] for f in byn.values())
+    return sorted(out, key=lambda g: g[0])
+
+
+def _movie_groups(root):
+    """-> [(ordner, [[teil1, teil2], [film], …])] für eine Filmbibliothek."""
+    found = {d: vids for d, vids in _walk_videos(root) if vids}
+    return [(d, _group_parts(items)) for d, items in sorted(_merge_cd_dirs(found, root).items())]
+
+
+def _scan_movie_dir(root, dirpath, groups, seen, progress=None):
     new = 0
-    vids = _drop_trailers(vids)
-    single = len(vids) == 1 and os.path.normpath(dirpath) != os.path.normpath(root)
-    for v in vids:
-        seen.add(v)
+    single = len(groups) == 1 and os.path.normpath(dirpath) != os.path.normpath(root)
+    for group in groups:
+        v = group[0]
+        parts = group if len(group) > 1 else None
+        seen.update(group)
         status = paths.movie_status(v, single)
-        existing = db.one("SELECT id, status, tmdb_id, guess_title, guess_year FROM movies WHERE path=?", (v,))
+        existing = db.one("SELECT id, status, tmdb_id, guess_title, guess_year, part_files FROM movies WHERE path=?", (v,))
         if existing:
             extra = {}
             if existing["status"] in ("neu", "manuell", "fehler") and not existing["tmdb_id"]:
@@ -74,7 +121,11 @@ def _scan_movie_dir(root, dirpath, vids, seen, progress=None):
                 if (g["title"], g["year"]) != (existing["guess_title"], existing["guess_year"]):
                     extra = {"guess_title": g["title"], "guess_year": g["year"], "title": g["title"],
                              "year": g["year"], "status": "neu", "message": None}
-            db.update("movies", existing["id"], single_folder=int(single), missing=0,
+            if (existing.get("part_files") or None) != parts:
+                extra["part_files"] = parts
+                if parts:
+                    db.log("INFO", f"Mehrteiliger Film erkannt ({len(parts)} Teile): {os.path.basename(v)}")
+            db.update("movies", existing["id"], single_folder=int(single), missing=0, folder=dirpath,
                       **{k: int(x) for k, x in status.items()}, **extra)
             continue
         g = parser.guess_movie(v, single)
@@ -85,10 +136,10 @@ def _scan_movie_dir(root, dirpath, vids, seen, progress=None):
         db.execute(
             "INSERT INTO movies (path, folder, single_folder, guess_title, guess_year, "
             "tmdb_id, imdb_id, title, year, has_nfo, has_poster, has_fanart, has_trailer, "
-            "added, updated, hints) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "added, updated, hints, part_files) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (v, dirpath, int(single), g["title"], g["year"], tmdb_id, imdb_id,
              g["title"], g["year"], *(int(x) for x in status.values()), db.now(), db.now(),
-             json.dumps(_hints(g, ids))))
+             json.dumps(_hints(g, ids)), json.dumps(parts) if parts else None))
         new += 1
         if progress:
             progress(f"Neu: {g['title']} ({g['year'] or '?'})")
@@ -102,8 +153,8 @@ def scan_movies(progress=None):
         if not os.path.isdir(root):
             db.log("ERROR", f"Filmpfad nicht gefunden: {root}")
             continue
-        for dirpath, vids in _walk_videos(root):
-            new += _scan_movie_dir(root, dirpath, vids, seen, progress)
+        for dirpath, groups in _movie_groups(root):
+            new += _scan_movie_dir(root, dirpath, groups, seen, progress)
     _mark_missing("movies", "path", seen, config.paths("movie_paths"))
     db.log("INFO", f"Filmscan fertig: {len(seen)} Filme, {new} neu")
     return new
@@ -116,13 +167,25 @@ def scan_movie_path(path):
         db.log("WARN", f"Pfad liegt in keiner Filmbibliothek: {path}")
         return None
     dirpath = os.path.dirname(path)
+    if parser.CD_DIR.match(os.path.basename(dirpath)):
+        dirpath = os.path.dirname(dirpath)          # Film/CD2/x.avi -> Film
     try:
-        vids = sorted(os.path.join(dirpath, f) for f in os.listdir(dirpath) if parser.is_video(f))
+        found = {dirpath: sorted(os.path.join(dirpath, f) for f in os.listdir(dirpath) if parser.is_video(f))}
+        for d in os.listdir(dirpath):
+            sub = os.path.join(dirpath, d)
+            if parser.CD_DIR.match(d) and os.path.isdir(sub):
+                found[sub] = sorted(os.path.join(sub, f) for f in os.listdir(sub) if parser.is_video(f))
     except OSError as e:
         db.log("WARN", f"Ordner nicht lesbar: {dirpath}: {e}")
         return None
     seen = set()
-    _scan_movie_dir(root, dirpath, vids, seen)
+    merged = _merge_cd_dirs(found, root)
+    for d, items in merged.items():
+        _scan_movie_dir(root, d, _group_parts(items), seen)
+    if path in seen and not db.one("SELECT id FROM movies WHERE path=?", (path,)):
+        row = db.one("SELECT * FROM movies WHERE part_files LIKE ?", (f'%{json.dumps(path)[1:-1]}%',))
+        if row:
+            return row
     for r in db.query("SELECT id, path FROM movies WHERE folder=?", (dirpath,)):
         if r["path"] not in seen and not os.path.exists(r["path"]):
             db.execute("DELETE FROM movies WHERE id=?", (r["id"],))

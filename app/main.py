@@ -16,7 +16,7 @@ from . import (animelists, arr, artpicker, config, db, emby, fanart, fernsehseri
                scraper, tmdb, trakt, tvdb, wikidata)
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
-VERSION = "1.4.2"
+VERSION = "1.5.0"
 NO_CACHE = {"Cache-Control": "no-cache"}
 CACHE = os.path.join(db.DATA_DIR, "cache")
 SECRET_KEYS = ("tmdb_api_key", "emby_api_key", "tvdb_api_key", "tvdb_pin", "fanart_api_key",
@@ -276,6 +276,10 @@ def movie(mid: int):
     if not m:
         raise HTTPException(404)
     m["files"] = paths.movie_files(m["path"], bool(m["single_folder"]))
+    if m.get("part_files"):
+        m["stack_ok"] = renamer.stack_ok(m)
+        p = renamer.plan_stack(m)
+        m["stack_plan"] = [os.path.basename(d) for _, d in p["parts"]] if p else None
     return m
 
 
@@ -415,6 +419,17 @@ class RenameReq(BaseModel):
 @app.post("/api/rename/preview")
 def rename_preview(body: RenameReq):
     return renamer.preview(body.movie_ids, body.show_ids)
+
+
+@app.post("/api/movies/stack")
+def movies_stack(body: dict):
+    ids = [int(i) for i in (body or {}).get("ids", [])]
+    rows = [db.one("SELECT * FROM movies WHERE id=?", (i,)) for i in ids]
+    todo = [r["id"] for r in rows if r and renamer.plan_stack(r)]
+    if not todo:
+        return {"started": None, "count": 0}
+    _start(f"{len(todo)} Mehrteiler zusammenführen", jobs.job_stack, todo)
+    return {"started": True, "count": len(todo)}
 
 
 @app.post("/api/rename/apply")

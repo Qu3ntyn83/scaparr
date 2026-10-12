@@ -55,10 +55,57 @@ ART_SUFFIX = {"poster", "fanart", "thumb", "trailer", "clearlogo", "logo", "land
               "clearart", "disc", "discart", "backdrop", "keyart"}
 
 
+EMBY_PART = re.compile(r"^(.*)-cd([1-9])$", re.I)
+
+
+def stack_ok(m):
+    """Erkennt Emby/Jellyfin die Teile als einen Film? Nur bei "<Name>-cd1.ext", "<Name>-cd2.ext" im Filmordner."""
+    parts = m.get("part_files") or []
+    if len(parts) < 2:
+        return True
+    bases = set()
+    for i, p in enumerate(parts, 1):
+        mm = EMBY_PART.match(os.path.splitext(os.path.basename(p))[0])
+        if os.path.dirname(p) != m["folder"] or not mm or int(mm.group(2)) != i:
+            return False
+        bases.add(mm.group(1))
+    return len(bases) == 1 and bool(m.get("single_folder"))
+
+
+def _part_targets(m, new_folder, new_stem):
+    return [os.path.join(new_folder, f"{new_stem}-cd{i}{os.path.splitext(p)[1]}")
+            for i, p in enumerate(m["part_files"], 1)]
+
+
+def plan_stack(m):
+    """Teile in Emby-taugliche Namen bringen (<Name>-cd1/-cd2 im Filmordner), ohne den Titel zu ändern."""
+    from . import parser
+    parts = m.get("part_files") or []
+    if len(parts) < 2 or stack_ok(m):
+        return None
+    if m.get("single_folder"):
+        base = os.path.basename(m["folder"])          # eigener Ordner: Teile heißen wie der Ordner
+        folder = m["folder"]
+    else:
+        # gemischter Ordner: Emby/Jellyfin bündeln Teile nur im eigenen Filmordner -> Ordner anlegen
+        meta = m.get("meta") or {}
+        if meta.get("title"):
+            base = _fmt(config.get("rename_movie_folder"), title=meta.get("title"), year=meta.get("year") or "",
+                        original_title=meta.get("original_title"), fsk=meta.get("fsk") or "",
+                        tmdb_id=meta.get("tmdb_id"))
+        else:
+            base = parser.part_info(os.path.splitext(os.path.basename(parts[0]))[0])[0] or "Film"
+            base = clean(base.replace(".", " ") if "." in base and " " not in base else base)
+        folder = os.path.join(m["folder"], base)
+    targets = _part_targets(m, folder, clean(base))
+    return {"id": m["id"], "type": "movie", "old": parts[0], "new": targets[0], "old_folder": m["folder"],
+            "new_folder": folder, "parts": list(zip(parts, targets)), "own_folder": folder != m["folder"]}
+
+
 def plan_movie(m):
     meta = m.get("meta") or {}
     if not meta:
-        return None
+        return plan_stack(m)
     vals = {"title": meta.get("title"), "year": meta.get("year") or "",
             "original_title": meta.get("original_title"), "fsk": meta.get("fsk") or "",
             "tmdb_id": meta.get("tmdb_id")}
@@ -68,6 +115,16 @@ def plan_movie(m):
     new_folder = folder
     if m["single_folder"]:
         new_folder = os.path.join(os.path.dirname(folder), _fmt(config.get("rename_movie_folder"), **vals))
+    if m.get("part_files") and len(m["part_files"]) > 1 and not m["single_folder"]:
+        return plan_stack(m)                       # Mehrteiler im gemischten Ordner -> eigener Filmordner
+    if m.get("part_files") and len(m["part_files"]) > 1:
+        # Mehrteiler: alle Teile als <Name>-cd1, -cd2 … in den (neuen) Filmordner
+        rel = [os.path.join(new_folder, os.path.relpath(p, folder)) for p in m["part_files"]]
+        targets = _part_targets(m, new_folder, new_stem)
+        if new_folder == folder and rel == targets:
+            return None
+        return {"id": m["id"], "type": "movie", "old": m["path"], "new": targets[0], "old_folder": folder,
+                "new_folder": new_folder, "parts": list(zip(m["part_files"], targets))}
     new_path = os.path.join(new_folder, new_stem + ext)
     if new_path == m["path"]:
         return None
@@ -112,7 +169,11 @@ def preview(movie_ids=None, show_ids=None):
     for p in plans:
         targets.setdefault(os.path.normcase(p["new"]), []).append(p)
     for p in plans:
-        exists = os.path.exists(p["new"]) and os.path.normcase(p["new"]) != os.path.normcase(p["old"])
+        olds = {os.path.normcase(o) for o, _ in p.get("parts") or []} | {os.path.normcase(p["old"])}
+        exists = any(os.path.exists(n) and os.path.normcase(n) not in olds
+                     for n in [t for _, t in p.get("parts") or []] or [p["new"]])
+        if not p.get("parts"):
+            exists = os.path.exists(p["new"]) and os.path.normcase(p["new"]) != os.path.normcase(p["old"])
         p["conflict"] = "Ziel existiert bereits" if exists else \
             "Doppelter Zielname" if len(targets[os.path.normcase(p["new"])]) > 1 else None
     return plans
@@ -154,11 +215,34 @@ def _move_with_sidecars(old, new):
 def _apply_movie(p):
     old, new = p["old"], p["new"]
     folder, new_folder = p["old_folder"], p["new_folder"]
+    if p.get("own_folder"):
+        # Mehrteiler aus gemischtem Ordner in eigenen Filmordner verschieben
+        if os.path.exists(new_folder):
+            raise OSError(f"Zielordner existiert bereits: {new_folder}")
+        os.makedirs(new_folder)
+        done = []
+        for src, dst in p["parts"]:
+            _move_with_sidecars(src, dst)
+            done.append(dst)
+        db.update("movies", p["id"], path=done[0], folder=new_folder, part_files=done, single_folder=1)
+        return
     if folder != new_folder:
         if os.path.exists(new_folder):
             raise OSError(f"Zielordner existiert bereits: {new_folder}")
         os.rename(folder, new_folder)
-        old = os.path.join(new_folder, os.path.basename(old))
+        old = os.path.join(new_folder, os.path.relpath(old, folder))
+    if p.get("parts"):
+        done = []
+        for src, dst in p["parts"]:
+            src = os.path.join(new_folder, os.path.relpath(src, folder))
+            if os.path.normcase(src) != os.path.normcase(dst):
+                _move_with_sidecars(src, dst)
+            done.append(dst)
+            sub = os.path.dirname(src)
+            if sub != new_folder and os.path.isdir(sub) and not os.listdir(sub):
+                os.rmdir(sub)                          # leeren CD1/CD2-Ordner entfernen
+        db.update("movies", p["id"], path=done[0], folder=new_folder, part_files=done)
+        return
     if old != new:
         _move_with_sidecars(old, new)
     db.update("movies", p["id"], path=new, folder=new_folder)

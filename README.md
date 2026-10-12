@@ -76,6 +76,19 @@ Wikidata-Eintrag mit OFDb-ID bekommen deshalb keine OFDb-Daten.
 **Zu Wikidata:** Die Abfragen laufen über die normale Wikidata-API (1/Sekunde). Bei einer Drosselung (HTTP 429)
 pausiert die Quelle 10 Minuten, statt weiter anzufragen.
 
+## Mehrteilige Filme (2 CDs)
+
+Teile eines Films werden als **ein** Film geführt und gemeinsam gescrapt, z. B.
+`Film-cd1.avi`/`Film-cd2.avi`, `Film.1999.German.CD1.XviD.avi`, `Film (Disc 1).mkv` oder Unterordner
+`Film (1999)/CD1/…` und `CD2/…`. NFO und Bilder landen als `movie.nfo`, `poster.jpg` … im Filmordner,
+der Trailer unter `trailers/`.
+
+Emby und Jellyfin fassen Teile nur zusammen, wenn sie `<Name>-cd1.ext`, `<Name>-cd2.ext` heißen und im eigenen
+Filmordner liegen. Passt das nicht, zeigt die Detailansicht die geplanten Namen und den Knopf
+**Für Emby zusammenführen**: Die Teile werden umbenannt (Untertitel wandern mit), aus `CD1`/`CD2` in den
+Filmordner geholt bzw. aus einem Sammelordner in einen eigenen Ordner verschoben, und der Medienserver liest den
+Film neu ein. Das normale *Umbenennen* berücksichtigt Mehrteiler ebenfalls.
+
 ## Ordnerstruktur Serien
 
 Serien dürfen direkt in der Bibliothek liegen (`serien/Dark/Staffel 1/…`) oder in Kategorie-/Genre-Ordnern

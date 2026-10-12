@@ -104,7 +104,8 @@ def init():
         # Migrationen für ältere Datenbanken
         for table, col, typ in (("movies", "hints", "TEXT"), ("shows", "hints", "TEXT"),
                                 ("shows", "mapping", "TEXT"), ("shows", "has_theme", "INTEGER DEFAULT 0"),
-                                ("movies", "art_lock", "TEXT"), ("shows", "art_lock", "TEXT")):
+                                ("movies", "art_lock", "TEXT"), ("shows", "art_lock", "TEXT"),
+                                ("movies", "part_files", "TEXT")):
             cols = [r[1] for r in c.execute(f"PRAGMA table_info({table})")]
             if col not in cols:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
@@ -114,7 +115,7 @@ def row(r):
     if r is None:
         return None
     d = dict(r)
-    for k in ("meta", "episodes", "hints", "mapping", "parts", "art_lock"):
+    for k in ("meta", "episodes", "hints", "mapping", "parts", "art_lock", "part_files"):
         if k in d and d[k]:
             try:
                 d[k] = json.loads(d[k])
