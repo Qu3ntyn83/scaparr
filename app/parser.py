@@ -129,25 +129,67 @@ def guess_movie(path: str, single_folder: bool):
         m = IMDB_RE.search(src)
         if m:
             hints["imdb_id"] = m.group(1)
-    candidates = []
-    if single_folder and YEAR_IN_NAME.search(folder + " "):
-        candidates.append(folder)
-    candidates.append(stem)
-    if single_folder:
-        candidates.append(folder)
-    for c in candidates:
-        c, part = clean_tv_name(strip_ids(c))
-        if part:
-            hints["part"] = part
-        g = guessit(c, {"type": "movie"})
-        title = _clean_title(g.get("title"))
-        alt = g.get("alternative_title")
-        if title and alt:   # "Herr der Ringe - Die Gefährten"
-            title = f"{title} - {_clean_title(alt if isinstance(alt, str) else alt[0])}"
-        if title:
-            year = g.get("year")
-            return {"title": title, "year": int(year) if year else None, **hints}
+    cands = _name_candidates(folder, stem, single_folder)
+    for c in cands:
+        t = _title_of(c, hints)
+        if t:
+            return {**t, **hints}
     return {"title": stem, "year": None, **hints}
+
+
+GENERIC_NAMES = {"movie", "film", "video", "sample", "main", "disc", "dvd", "bluray", "bd", "hd", "full", "feature",
+                 "untitled", "track", "title", "vts", "video ts", "index"}
+
+
+def _name_candidates(folder, stem, single_folder):
+    """Namen, aus denen der Titel gelesen werden kann, nach Zuverlässigkeit sortiert."""
+    if single_folder and YEAR_IN_NAME.search(folder + " "):
+        return [folder, stem]
+    if single_folder and _generic(stem):
+        return [folder, stem]                     # Dateiname sagt nichts -> Ordnername zuerst
+    return [stem] + ([folder] if single_folder else [])
+
+
+def _generic(name):
+    """Dateiname taugt nicht als Titel: leer, nur Zahlen, sehr kurz oder Allerweltswort."""
+    n = re.sub(r"[^a-z0-9]+", " ", strip_ids(name).lower()).strip()
+    n = re.sub(r"\b(?:19|20)\d{2}\b|\b(?:480|576|720|1080|2160)[pi]\b|\b[hx]26[45]\b", " ", n).strip()
+    n = re.sub(r"\b(?:cd|dvd|disc|disk|part|pt)\s?\d\b", " ", n).strip()
+    n = re.sub(r"\s+", " ", n)
+    return len(n) < 3 or n.isdigit() or n in GENERIC_NAMES
+
+
+def _title_of(c, hints):
+    c, part = clean_tv_name(strip_ids(c))
+    if part:
+        hints["part"] = part
+    g = guessit(c, {"type": "movie"})
+    title = _clean_title(g.get("title"))
+    alt = g.get("alternative_title")
+    if title and alt:   # "Herr der Ringe - Die Gefährten"
+        title = f"{title} - {_clean_title(alt if isinstance(alt, str) else alt[0])}"
+    if not title or _generic(title):
+        return None
+    year = g.get("year")
+    return {"title": title, "year": int(year) if year else None}
+
+
+def title_candidates(path, single_folder):
+    """Alle Titelvorschläge aus Datei- und Ordnername (ohne Duplikate) – für die Ausweichsuche beim Scrapen."""
+    folder = os.path.basename(os.path.dirname(path))
+    if CD_DIR.match(folder):
+        folder = os.path.basename(os.path.dirname(os.path.dirname(path)))
+    stem0 = os.path.splitext(os.path.basename(path))[0]
+    stem = part_info(stem0)[0] or stem0
+    out, seen = [], set()
+    # der Ordner zählt auch dann, wenn die Datei nicht allein darin liegt – er wird nur als Ausweichsuche benutzt
+    for c in (stem, folder):
+        t = _title_of(c, {})
+        key = re.sub(r"[^a-z0-9]", "", t["title"].lower()) if t else None
+        if t and key and key not in seen:
+            seen.add(key)
+            out.append(t)
+    return out
 
 
 def guess_show_folder(folder: str):

@@ -9,7 +9,7 @@ import unicodedata
 
 import httpx
 
-from . import animelists, artpicker, artwork, config, db, emby, enrich, moviesets, nfo, paths, tmdb, tvdb
+from . import parser, animelists, artpicker, artwork, config, db, emby, enrich, moviesets, nfo, paths, tmdb, tvdb
 
 
 # ---------------------------------------------------------------- Matching
@@ -334,6 +334,10 @@ def anime_entry(hints):
     return None
 
 
+def _norm_key(t):
+    return re.sub(r"[^a-z0-9]", "", (t or "").lower())
+
+
 def resolve_movie_id(m):
     if m.get("tmdb_id"):
         return m["tmdb_id"], True, None
@@ -345,6 +349,21 @@ def resolve_movie_id(m):
         if r:
             return r[0]["id"], True, None
     hit, sure, results = search_with_variants(tmdb.search_movie, m["guess_title"], m["guess_year"])
+    if not sure:
+        # Dateiname taugt nicht? Dann mit dem Ordnernamen (bzw. umgekehrt) versuchen – nur sichere Treffer zählen
+        used = {_norm_key(m["guess_title"])}
+        for alt in parser.title_candidates(m["path"], bool(m.get("single_folder"))):
+            if _norm_key(alt["title"]) in used:
+                continue
+            used.add(_norm_key(alt["title"]))
+            h, s, res = search_with_variants(tmdb.search_movie, alt["title"], alt["year"] or m["guess_year"])
+            if h and s:
+                db.log("INFO", f"Treffer über Ordner-/Dateinamen „{alt['title']}“: „{m['guess_title']}“ → "
+                               f"{h['title']} ({h.get('year') or '?'})")
+                return h["tmdb_id"], True, res
+            results = results + [r for r in res if r["tmdb_id"] not in {x["tmdb_id"] for x in results}]
+            if not hit and h:
+                hit = h
     return (hit["tmdb_id"] if hit else None), sure, results
 
 

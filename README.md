@@ -145,6 +145,10 @@ git pull
 docker compose up -d --build
 ```
 
+**Ordnername als Hilfe:** Taugt der Dateiname nicht als Titel (z. B. `movie.mkv`, `00001.mkv`, nur Zahlen), gilt der Ordnername
+zuerst. Findet die Suche mit dem Dateinamen keinen sicheren Treffer, versucht Scraparr es zusätzlich mit dem Ordnernamen
+(und umgekehrt). Es zählen nur sichere Treffer – alles andere landet wie bisher in der manuellen Zuordnung.
+
 yt-dlp veraltet schnell: Schlägt der Trailer-Download fehl, einmal `docker compose build --no-cache` ausführen.
 
 **„Sign in to confirm you're not a bot"**: YouTube blockt Server-IPs gelegentlich. Dann Cookies eines angemeldeten
