@@ -212,6 +212,23 @@ def _move_with_sidecars(old, new):
     return old_base, new_base
 
 
+def _move_parts(pairs):
+    """Teile verschieben; scheitert eines, werden die bereits verschobenen zurückgelegt (kein halber Zustand)."""
+    moved = []
+    try:
+        for src, dst in pairs:
+            if os.path.normcase(src) != os.path.normcase(dst):
+                _move_with_sidecars(src, dst)
+                moved.append((src, dst))
+    except OSError:
+        for src, dst in reversed(moved):
+            try:
+                _move_with_sidecars(dst, src)
+            except OSError as e:
+                db.log("ERROR", f"Zurücklegen fehlgeschlagen {dst} → {src}: {e}")
+        raise
+
+
 def _apply_movie(p):
     old, new = p["old"], p["new"]
     folder, new_folder = p["old_folder"], p["new_folder"]
@@ -220,10 +237,15 @@ def _apply_movie(p):
         if os.path.exists(new_folder):
             raise OSError(f"Zielordner existiert bereits: {new_folder}")
         os.makedirs(new_folder)
-        done = []
-        for src, dst in p["parts"]:
-            _move_with_sidecars(src, dst)
-            done.append(dst)
+        try:
+            _move_parts(p["parts"])
+        except OSError:
+            try:
+                os.rmdir(new_folder)                   # leeren Zielordner wieder entfernen
+            except OSError:
+                pass
+            raise
+        done = [dst for _, dst in p["parts"]]
         db.update("movies", p["id"], path=done[0], folder=new_folder, part_files=done, single_folder=1)
         return
     if folder != new_folder:
@@ -232,12 +254,10 @@ def _apply_movie(p):
         os.rename(folder, new_folder)
         old = os.path.join(new_folder, os.path.relpath(old, folder))
     if p.get("parts"):
-        done = []
-        for src, dst in p["parts"]:
-            src = os.path.join(new_folder, os.path.relpath(src, folder))
-            if os.path.normcase(src) != os.path.normcase(dst):
-                _move_with_sidecars(src, dst)
-            done.append(dst)
+        pairs = [(os.path.join(new_folder, os.path.relpath(src, folder)), dst) for src, dst in p["parts"]]
+        _move_parts(pairs)
+        done = [dst for _, dst in pairs]
+        for src, _ in pairs:
             sub = os.path.dirname(src)
             if sub != new_folder and os.path.isdir(sub) and not os.listdir(sub):
                 os.rmdir(sub)                          # leeren CD1/CD2-Ordner entfernen

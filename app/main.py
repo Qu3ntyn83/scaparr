@@ -42,13 +42,16 @@ WEB_USER, WEB_PASS = os.environ.get("WEB_USER"), os.environ.get("WEB_PASS")
 
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
-    if WEB_USER and WEB_PASS and not request.url.path.startswith("/api/hook/"):   # Webhooks: Token
+    # Webhooks (POST) prüfen ihr eigenes Token; alles andere – auch /api/hook/info mit dem Token – braucht den Login
+    is_hook = request.method == "POST" and request.url.path in ("/api/hook/radarr", "/api/hook/sonarr")
+    if WEB_USER and WEB_PASS and not is_hook:
         auth = request.headers.get("authorization", "")
         ok = False
         if auth.startswith("Basic "):
             try:
                 u, _, p = base64.b64decode(auth[6:]).decode().partition(":")
-                ok = secrets.compare_digest(u, WEB_USER) and secrets.compare_digest(p, WEB_PASS)
+                ok = (secrets.compare_digest(u.encode(), WEB_USER.encode())
+                      & secrets.compare_digest(p.encode(), WEB_PASS.encode()))
             except (ValueError, UnicodeDecodeError):
                 pass
         if not ok:
@@ -244,7 +247,8 @@ def hook_info(request: Request):
 async def hook(system: str, request: Request, token: str = ""):
     if system not in ("radarr", "sonarr"):
         raise HTTPException(404)
-    if not secrets.compare_digest(token, config.get("webhook_token") or "x"):
+    expected = config.get("webhook_token")
+    if not expected or not secrets.compare_digest(token.encode(), expected.encode()):
         raise HTTPException(401, "Token ungültig")
     try:
         payload = await request.json()
