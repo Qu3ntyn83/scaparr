@@ -66,6 +66,36 @@ def _clean_title(t):
     return re.sub(r"\s+", " ", str(t)).strip() if t else None
 
 
+# TV-Mitschnitte / Mediatheken: Sender, Mediathek-Kennungen und Sendedaten im Namen stören die Suche
+_SENDER = (r"ndr|ard|das\s?erste|zdf|zdfneo|zdfinfo|arte|3sat|wdr|br|swr|mdr|hr|rbb|sr|phoenix|kika|"
+           r"orf\s?[123]?|orf\s?iii|srf\s?[12]?|servus\s?tv|rtl\s?(?:2|zwei|up|nitro)?|sat\.?\s?1|pro\s?7|"
+           r"prosieben(?:\s?maxx)?|vox|kabel\s?(?:1|eins)|dmax|tele\s?5|n-?tv|n24|tagesschau24|"
+           r"ard-?alpha|ard-?mediathek|zdf-?mediathek|arte\.tv|mediathek|mediathekview")
+SENDER_TAIL = re.compile(rf"(?:[\s._-]+(?:{_SENDER})(?:\.(?:de|tv|at|ch|com))?)+\s*$", re.I)
+SENDER_BRACKET = re.compile(rf"[\[(]\s*(?:{_SENDER})(?:\.(?:de|tv|at|ch))?\s*[\])]", re.I)
+DATE_TAIL = re.compile(r"[\s._-]+(?:\d{4}[-._]\d{2}[-._]\d{2}|\d{2}[-._]\d{2}[-._]\d{4})(?:[\s._-]+\d{2}[-.:]\d{2})?\s*$")
+# Mehrteiler: "Teil 2", "(2/3)", "(2-3)", "Folge 2" – ausdrücklich markiert, deshalb sicher entfernbar
+PART_MARK = re.compile(r"[\s._-]*(?:\(\s*(\d{1,2})\s*[/-]\s*\d{1,2}\s*\)|\b(?:teil|folge|part)[\s._-]*(\d{1,2})\b)\s*$", re.I)
+
+
+def clean_tv_name(name):
+    """Sender/Mediathek/Datum am Ende und Teil-Markierungen entfernen -> (bereinigt, teil|None)."""
+    n = SENDER_BRACKET.sub(" ", name or "")
+    part = None
+    for _ in range(3):
+        before = n
+        n = DATE_TAIL.sub("", n)
+        n = SENDER_TAIL.sub("", n)
+        m = PART_MARK.search(n)
+        if m:
+            part = int(m.group(1) or m.group(2))
+            n = n[:m.start()]
+        n = n.rstrip(" -_.")
+        if n == before:
+            break
+    return (n.strip() or name), part
+
+
 def guess_movie(path: str, single_folder: bool):
     """Titel/Jahr aus Ordnername (bevorzugt, wenn er ein Jahr enthält) oder Dateiname."""
     folder = os.path.basename(os.path.dirname(path))
@@ -83,7 +113,9 @@ def guess_movie(path: str, single_folder: bool):
     if single_folder:
         candidates.append(folder)
     for c in candidates:
-        c = strip_ids(c)
+        c, part = clean_tv_name(strip_ids(c))
+        if part:
+            hints["part"] = part
         g = guessit(c, {"type": "movie"})
         title = _clean_title(g.get("title"))
         alt = g.get("alternative_title")

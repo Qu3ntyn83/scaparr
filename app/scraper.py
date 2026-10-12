@@ -55,24 +55,69 @@ def umlaut_variants(title):
     return out[:3]
 
 
+TV_GENRES = {10770, 99}        # TMDB: TV-Film, Dokumentarfilm
+_ROMAN = {"2": "II", "3": "III", "4": "IV", "5": "V", "6": "VI"}
+
+
+def _alt_queries(title):
+    """Weitere Suchbegriffe, wichtigste zuerst: (Suchtext, Vergleichstitel, darf sicher sein?)."""
+    out = [(v, title, True) for v in umlaut_variants(title)]
+    m = re.match(r"^(.*\S)\s+(\d)$", title or "")
+    if m:                                       # "Die Pilgerin 2"
+        base, n = m.groups()
+        if n in _ROMAN:
+            out.append((f"{base} {_ROMAN[n]}", f"{base} {_ROMAN[n]}", True))   # Rocky 2 -> Rocky II
+        out.append((base, base, "tv"))          # Mehrteiler: nur bei TV-Produktion sicher
+    parts = re.split(r"\s+[-–:]\s+", title or "", maxsplit=1)
+    if len(parts) == 2 and all(len(p) >= 3 for p in parts):
+        out.append((parts[0], parts[0], "tv"))  # "Gigant des Nordens - Der Hamburger Hafen"
+        out.append((parts[1], parts[1], "tv"))  # "Tatort - Der Turm"
+    seen, uniq = {title}, []
+    for q in out:
+        if q[0] not in seen:
+            seen.add(q[0])
+            uniq.append(q)
+    return uniq
+
+
+def _same_as_tv(title, year):
+    """Gibt es den Titel bei TMDB nur als Serie (z. B. zweiteiliger TV-Film als Miniserie)?"""
+    try:
+        res = tmdb.search_tv(title, year) or tmdb.search_tv(re.sub(r"\s+\d$", "", title or ""), year)
+    except Exception:          # noqa – reiner Hinweis, darf den Scrape nicht stören
+        return None
+    tf = _forms(re.sub(r"\s+\d$", "", title or ""))
+    return next((r for r in res if _same(tf, r)), None)
+
+
+def _is_tv(r):
+    return bool(TV_GENRES & set(r.get("genre_ids") or []))
+
+
 def search_with_variants(search, title, year):
-    """TMDB-Suche; ohne sicheren Treffer zusätzlich mit Umlaut-Schreibweisen suchen."""
+    """TMDB-Suche mit Ausweichbegriffen: Umlaute, römische Ziffern, Mehrteiler ohne Teilnummer,
+    Haupt-/Untertitel einzeln. Treffer über gekürzte Titel gelten nur bei TV-Filmen/Dokus als sicher."""
     results = search(title, year) or []
     hit, sure = best_match(results, title, year)
     if sure:
         return hit, sure, results
     seen = {r["tmdb_id"] for r in results}
-    for v in umlaut_variants(title):
-        more = [r for r in (search(v, year) or []) if r["tmdb_id"] not in seen]
-        if not more:
-            continue
+    for query, match_title, may_be_sure in _alt_queries(title):
+        found = search(query, year) or []
+        more = [r for r in found if r["tmdb_id"] not in seen]
         seen.update(r["tmdb_id"] for r in more)
         results = results + more
-        hit, sure = best_match(results, title, year)
-        if sure:
-            db.log("INFO", f"Treffer über Umlaut-Schreibweise: „{title}“ → „{v}“")
-            break
-    return hit, sure, results
+        h, s = best_match(found, match_title, year)
+        if h and s and may_be_sure == "tv" and not _is_tv(h):
+            s = False                           # gekürzter Titel bei Kinofilm: lieber prüfen lassen
+        if h and s:
+            db.log("INFO", f"Treffer über Suchbegriff „{query}“: „{title}“ → {h['title']} ({h.get('year') or '?'})")
+            return h, True, results
+        if h and not hit:
+            hit = h
+    if not hit and results:
+        hit, _ = best_match(results, title, year)
+    return hit, False, results
 
 
 def best_match(results, title, year):
@@ -295,8 +340,13 @@ def scrape_movie(movie_id, tmdb_id=None, force=False, auto=False):
         else:
             tmdb_id, sure, _ = resolve_movie_id(m)
         if not tmdb_id:
-            db.update("movies", movie_id, status="manuell", message="Kein Treffer bei TMDB")
-            db.log("WARN", f"Kein Treffer: {m['guess_title']} ({m['guess_year']})")
+            msg = "Kein Treffer bei TMDB"
+            tv = _same_as_tv(m["guess_title"], m["guess_year"])
+            if tv:
+                msg = (f"Bei TMDB nur als Serie/Mehrteiler geführt: „{tv['title']}“ ({tv.get('year') or '?'}) – "
+                       f"in die Serienbibliothek verschieben oder über Suchen & Zuordnen einen Film wählen")
+            db.update("movies", movie_id, status="manuell", message=msg)
+            db.log("WARN", f"Kein Treffer: {m['guess_title']} ({m['guess_year']})" + (" – nur als Serie bei TMDB" if tv else ""))
             return False
         if not sure and auto:
             db.update("movies", movie_id, status="manuell",

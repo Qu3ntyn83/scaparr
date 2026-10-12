@@ -81,7 +81,7 @@ def search_movie(query, year=None):
         "tmdb_id": r["id"], "title": r.get("title"), "original_title": r.get("original_title"),
         "year": int(r["release_date"][:4]) if r.get("release_date") else None,
         "overview": r.get("overview"), "poster": img(r.get("poster_path"), "w185"),
-        "popularity": r.get("popularity", 0),
+        "popularity": r.get("popularity", 0), "genre_ids": r.get("genre_ids") or [],
     } for r in res]
 
 
@@ -94,7 +94,7 @@ def search_tv(query, year=None):
         "tmdb_id": r["id"], "title": r.get("name"), "original_title": r.get("original_name"),
         "year": int(r["first_air_date"][:4]) if r.get("first_air_date") else None,
         "overview": r.get("overview"), "poster": img(r.get("poster_path"), "w185"),
-        "popularity": r.get("popularity", 0),
+        "popularity": r.get("popularity", 0), "genre_ids": r.get("genre_ids") or [],
     } for r in res]
 
 

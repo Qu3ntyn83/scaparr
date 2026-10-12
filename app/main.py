@@ -16,7 +16,7 @@ from . import (animelists, arr, artpicker, config, db, emby, fanart, fernsehseri
                scraper, tmdb, trakt, tvdb, wikidata)
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 NO_CACHE = {"Cache-Control": "no-cache"}
 CACHE = os.path.join(db.DATA_DIR, "cache")
 SECRET_KEYS = ("tmdb_api_key", "emby_api_key", "tvdb_api_key", "tvdb_pin", "fanart_api_key",
@@ -398,7 +398,7 @@ def search(type: str, q: str, year: int | None = None):
         search = tmdb.search_movie if type == "movie" else tmdb.search_tv
         res = search(q, year)
         ids = {r["tmdb_id"] for r in res}
-        for v in scraper.umlaut_variants(q):     # "Maedchen" findet auch "Mädchen"
+        for v, _, _ in scraper._alt_queries(q):   # Umlaute, Mehrteiler, Haupt-/Untertitel
             more = [r for r in search(v, year) if r["tmdb_id"] not in ids]
             ids.update(r["tmdb_id"] for r in more)
             res += more

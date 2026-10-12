@@ -101,6 +101,14 @@ Automatisch übernommen werden nur **eindeutige** Treffer (Titel stimmt exakt, J
 mit Status **„prüfen“** in der Liste – dort per *Suchen & Zuordnen* (Titel, TMDB-ID oder IMDb-ID) festlegen.
 Neue Episoden einer bekannten Serie werden automatisch nachgescrapt.
 
+**TV-Produktionen und Mediathek-Mitschnitte:** Sender, Mediathek-Kennungen und Sendedaten am Namensende
+(`… NDR.de`, `… ZDF Mediathek 2023-05-14`, `[ARD]`) werden vor der Suche entfernt, ebenso Teilangaben wie
+`Teil 2`, `(2/3)`, `(2-2)`. Findet TMDB nichts, sucht Scraparr weiter: mit römischer Ziffer (`Rocky 2` → `Rocky II`),
+ohne Teilnummer (`Die Pilgerin 2` → `Die Pilgerin`) und mit Haupt- bzw. Untertitel einzeln
+(`Gigant des Nordens - Der Hamburger Hafen`). Treffer über gekürzte Titel werden nur bei TV-Filmen und
+Dokumentationen automatisch übernommen, sonst landen sie zur Prüfung in der Liste. Gibt es den Titel bei TMDB nur
+als Serie bzw. Miniserie, steht das als Hinweis am Eintrag.
+
 ## Installation (Docker)
 
 ```bash
