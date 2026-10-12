@@ -16,7 +16,7 @@ from . import (animelists, arr, artpicker, config, db, emby, fanart, fernsehseri
                scraper, tmdb, trakt, tvdb, wikidata)
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 NO_CACHE = {"Cache-Control": "no-cache"}
 CACHE = os.path.join(db.DATA_DIR, "cache")
 SECRET_KEYS = ("tmdb_api_key", "emby_api_key", "tvdb_api_key", "tvdb_pin", "fanart_api_key",
@@ -65,7 +65,8 @@ def status():
                 db.query(f"SELECT status, COUNT(*) n FROM {table} GROUP BY status")}
     return {"job": {k: v for k, v in jobs.state.items() if k != "cancel"},
             "movies": counts("movies"), "shows": counts("shows"), "episodes": counts("episodes"),
-            "api_key": bool(config.get("tmdb_api_key")), "version": VERSION}
+            "api_key": bool(config.get("tmdb_api_key")), "version": VERSION,
+            "server": emby.name() if emby.enabled() else None}
 
 
 @app.get("/api/settings")
@@ -89,6 +90,7 @@ def save_settings(values: dict):
             except ValueError as e:
                 raise HTTPException(400, str(e))
     config.save(values)
+    emby._kind.update(until=0)          # Servertyp (Emby/Jellyfin) neu erkennen
     db.log("INFO", "Einstellungen gespeichert")
     return get_settings()
 
@@ -179,8 +181,8 @@ def collections_action(action: str, body: CollAction):
     if action not in ("refresh", "emby"):
         raise HTTPException(404)
     if action == "emby" and not emby.enabled():
-        raise HTTPException(400, "Emby ist nicht eingerichtet")
-    name = "Kollektionen von TMDB laden" if action == "refresh" else "Kollektionen nach Emby"
+        raise HTTPException(400, "Kein Medienserver (Emby/Jellyfin) eingerichtet")
+    name = "Kollektionen von TMDB laden" if action == "refresh" else f"Kollektionen nach {emby.name()}"
     return _start(name, jobs.job_collections, action, body.ids or None)
 
 

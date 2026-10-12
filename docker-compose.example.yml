@@ -19,8 +19,9 @@ services:
       TRAKT_CLIENT_ID: ""                # optional
       MOVIE_PATHS: /media/filme
       TV_PATHS: /media/serien
-      EMBY_URL: http://192.168.1.10:8096
-      EMBY_API_KEY: ""
+      MEDIA_SERVER: auto                 # auto | emby | jellyfin
+      EMBY_URL: http://192.168.1.10:8096 # gilt auch für Jellyfin (alternativ JELLYFIN_URL)
+      EMBY_API_KEY: ""                   # bzw. JELLYFIN_API_KEY
       # EMBY_PATH_MAP: "/mnt/medien/filme => /media/filme"
       RADARR_URL: ""                     # z. B. http://192.168.1.20:7878
       RADARR_API_KEY: ""

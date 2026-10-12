@@ -63,8 +63,9 @@ DEFAULTS = {
     "collections_to_emby": True,             # Kollektionen in Emby anlegen/aktualisieren
     "collection_art_folder": "",             # optional: Bilder zusätzlich als <Ordner>/<Name>/poster.jpg ablegen
     # Emby
-    "emby_url": os.environ.get("EMBY_URL", ""),
-    "emby_api_key": os.environ.get("EMBY_API_KEY", ""),
+    "media_server": os.environ.get("MEDIA_SERVER", "auto"),   # auto | emby | jellyfin
+    "emby_url": os.environ.get("EMBY_URL", "") or os.environ.get("JELLYFIN_URL", ""),
+    "emby_api_key": os.environ.get("EMBY_API_KEY", "") or os.environ.get("JELLYFIN_API_KEY", ""),
     "emby_refresh_after_job": True,
     "emby_refresh_mode": "item",             # item: nur geänderte Titel neu einlesen | library: ganze Bibliothek
     "emby_path_map": os.environ.get("EMBY_PATH_MAP", ""),     # "Emby-Pfad => lokaler Pfad", eine Zeile je Zuordnung

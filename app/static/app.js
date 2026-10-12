@@ -25,6 +25,7 @@ function toast(msg, err = false) {
   clearTimeout(t._h); t._h = setTimeout(() => (t.className = "toast"), 3500);
 }
 
+const SRV = () => S.srv || "Emby";
 const img = (path, w = 0) => path ? `/api/image?path=${encodeURIComponent(path)}${w ? "&w=" + w : ""}&v=${S.bust}` : "";
 const fskBadge = (f) => f !== null && f !== undefined && f !== "" ? `<span class="fsk fsk-${esc(f)}">${esc(f)}</span>` : `<span class="fsk fsk-none">–</span>`;
 const dot = (v) => `<span class="ic ${v ? "y" : ""}"></span>`;
@@ -514,6 +515,7 @@ async function pollStatus() {
   try {
     const s = await api("GET", "/api/status");
     const j = s.job;
+    if ((s.server || "Emby") !== SRV()) { S.srv = s.server || "Emby"; $$(".srv").forEach((e) => (e.textContent = S.srv)); }
     $("#no-key").classList.toggle("hidden", s.api_key);
     $("#job-idle").classList.toggle("hidden", j.running);
     $("#job-run").classList.toggle("hidden", !j.running);
@@ -604,9 +606,9 @@ pollStatus();
 
 // ------------------------------------------------------------ Abgleich
 const SYS = {
-  emby: { name: "Emby", desc: "Wie zeigt Emby deine Titel an? Fehlende, abweichende und nicht eingelesene Einträge.",
-          labels: { emby_titel: "Titel in Emby", abweichungen: "Abweichungen", fehlt_in_emby: "fehlen in Emby", unbekannt: "außerhalb der Bibliotheken" },
-          action: "In Emby neu einlesen / melden" },
+  emby: { get name() { return SRV(); }, get desc() { return `Wie zeigt ${SRV()} deine Titel an? Fehlende, abweichende und nicht eingelesene Einträge.`; },
+          get labels() { return { emby_titel: `Titel in ${SRV()}`, abweichungen: "Abweichungen", fehlt_in_emby: `fehlen in ${SRV()}`, unbekannt: "außerhalb der Bibliotheken" }; },
+          get action() { return `In ${SRV()} neu einlesen / melden`; } },
   radarr: { name: "Radarr", desc: "TMDB-IDs aus Radarr – keine Raterei bei der Zuordnung.",
             labels: { radarr_filme: "Filme mit Datei", ids_uebernommen: "IDs übernommen", abweichungen: "ID-Abweichungen", fehlt_im_scraper: "fehlen hier", nur_im_scraper: "nur hier" },
             action: "Radarr-ID übernehmen & neu scrapen" },
@@ -633,7 +635,7 @@ async function loadSync() {
     const rows = issues.map((i, idx) => `<tr class="${i.id ? "clickable" : ""}" data-kind="${i.kind}" data-id="${i.id || ""}">
         <td>${i.action ? `<input type="checkbox" class="sync-chk" data-sys="${key}" data-idx="${idx}">` : ""}</td>
         <td><span class="tbadge ${esc(i.type)}">${esc(TYPE_LABEL[i.type] || i.type)}</span></td>
-        <td>${esc(i.title || i.arr_title || i.emby_title || "")}${i.arr_title && i.title && i.arr_title !== i.title ? `<br><small class="hint">${def.name}: ${esc(i.arr_title)}</small>` : ""}${i.emby_title && i.title && i.emby_title !== i.title ? `<br><small class="hint">Emby: ${esc(i.emby_title)}</small>` : ""}</td>
+        <td>${esc(i.title || i.arr_title || i.emby_title || "")}${i.arr_title && i.title && i.arr_title !== i.title ? `<br><small class="hint">${def.name}: ${esc(i.arr_title)}</small>` : ""}${i.emby_title && i.title && i.emby_title !== i.title ? `<br><small class="hint">${SRV()}: ${esc(i.emby_title)}</small>` : ""}</td>
         <td>${esc(i.text)}</td><td class="p">${esc(i.path || "")}</td></tr>`).join("");
     const actionable = issues.some((i) => i.action);
     return `<div class="sync-card">${head}<div class="chips">${chips}</div>
@@ -689,12 +691,12 @@ function renderSets() {
   });
   const total = SETS.items.length, incomplete = SETS.items.filter((c) => c.missing > 0).length;
   $("#sets-info").textContent = total
-    ? `${total} ${total === 1 ? "Reihe" : "Reihen"} in deiner Bibliothek · ${incomplete} unvollständig · in Emby ab ${SETS.min} eigenen Filmen${SETS.emby ? "" : " (Emby nicht eingerichtet)"}`
+    ? `${total} ${total === 1 ? "Reihe" : "Reihen"} in deiner Bibliothek · ${incomplete} unvollständig · in ${SRV()} ab ${SETS.min} eigenen Filmen${SETS.emby ? "" : " (Medienserver nicht eingerichtet)"}`
     : "Noch keine Filmreihen – sie erscheinen, sobald Filme einer Reihe gescrapt sind.";
   $("#sets-grid").innerHTML = list.map((c) => {
     const pct = c.total ? Math.round((c.owned / c.total) * 100) : 0;
-    const emby = c.emby_id ? `<span class="set-badge ok" title="In Emby angelegt">Emby</span>`
-      : (c.owned >= SETS.min && SETS.emby ? `<span class="set-badge" title="Wird beim nächsten Abgleich angelegt">Emby offen</span>` : "");
+    const emby = c.emby_id ? `<span class="set-badge ok" title="In ${SRV()} angelegt">${SRV()}</span>`
+      : (c.owned >= SETS.min && SETS.emby ? `<span class="set-badge" title="Wird beim nächsten Abgleich angelegt">${SRV()} offen</span>` : "");
     return `<button class="set-card" data-set="${c.tmdb_id}">
       <div class="set-poster" style="${c.poster ? `background-image:url('${esc(c.poster.replace("/original/", "/w342/"))}')` : ""}">${emby}</div>
       <div class="set-name">${esc(c.name)}</div>
@@ -724,11 +726,11 @@ async function openSet(cid) {
         <div>
           <div class="facts"><span>${c.owned} von ${parts.length} Filmen vorhanden</span>
             <a href="https://www.themoviedb.org/collection/${c.tmdb_id}?language=de-DE" target="_blank" rel="noopener">TMDB</a>
-            ${c.emby_synced ? `<span>Emby: ${new Date(c.emby_synced).toLocaleString("de-DE")}</span>` : ""}</div>
+            ${c.emby_synced ? `<span>${SRV()}: ${new Date(c.emby_synced).toLocaleString("de-DE")}</span>` : ""}</div>
           <div class="plot">${esc(c.overview || "Keine Beschreibung.")}</div>
           <div class="actions">
             <button class="btn ghost" data-setact="refresh" data-id="${c.tmdb_id}">⟳ Neu von TMDB</button>
-            ${SETS.emby ? `<button class="btn" data-setact="emby" data-id="${c.tmdb_id}">Nach Emby übertragen</button>` : ""}
+            ${SETS.emby ? `<button class="btn" data-setact="emby" data-id="${c.tmdb_id}">Nach ${SRV()} übertragen</button>` : ""}
           </div>
         </div>
       </div>

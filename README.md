@@ -1,7 +1,7 @@
 # Scraparr
 
 tinyMediaManager-Nachbau mit Webfrontend: scrapt Filme und Serien **komplett auf Deutsch** von TMDB
-und legt alles so ab, dass Emby (und Kodi/Jellyfin) es lokal einliest.
+und legt alles so ab, dass **Emby oder Jellyfin** (und Kodi) es lokal einliest.
 
 ## Was er macht
 
@@ -95,7 +95,7 @@ eintragen, sonst werden sie als eine Serie behandelt.
 
 ## Automatischer Lauf
 
-Alle *n* Minuten: Bibliotheken scannen → **neue** Titel scrapen → (optional) umbenennen → Emby-Bibliotheksscan anstoßen.
+Alle *n* Minuten: Bibliotheken scannen → **neue** Titel scrapen → (optional) umbenennen → Emby/Jellyfin aktualisieren.
 
 Automatisch übernommen werden nur **eindeutige** Treffer (Titel stimmt exakt, Jahr ±1). Alles andere landet
 mit Status **„prüfen“** in der Liste – dort per *Suchen & Zuordnen* (Titel, TMDB-ID oder IMDb-ID) festlegen.
@@ -108,7 +108,7 @@ Neue Episoden einer bekannten Serie werden automatisch nachgescrapt.
 git clone https://github.com/Qu3ntyn83/scaparr.git /opt/scraparr
 cd /opt/scraparr
 cp docker-compose.example.yml docker-compose.yml
-nano docker-compose.yml        # Medienpfade, PUID/PGID, Emby-URL anpassen
+nano docker-compose.yml        # Medienpfade, PUID/PGID, Emby-/Jellyfin-URL anpassen
 mkdir -p data
 docker compose up -d --build
 ```
@@ -130,7 +130,7 @@ Web-UI: `http://<host>:8585`
 
 1. **Einstellungen** → TMDB-API-Key eintragen (Pflicht); TVDB, fanart.tv und OMDb optional, jeweils mit *Testen* prüfen (themoviedb.org → Konto → Einstellungen → API; v3-Key
    oder das lange v4-„Lesezugriffs-Token“ – beides geht) → Speichern → *Verbindung testen*.
-2. Emby-URL + API-Key (Emby → Einstellungen → Erweitert → API-Schlüssel) eintragen, testen.
+2. Medienserver: Emby- oder Jellyfin-URL + API-Key eintragen, testen (der Servertyp wird erkannt).
 3. Oben **Scannen**, dann **Alle offenen scrapen** – oder einfach den Auto-Lauf machen lassen.
 
 ### Wichtig: Pfade und Rechte
@@ -154,6 +154,23 @@ Bibliothek bearbeiten:
 * *Bildmaterial in Medienordnern speichern*: egal, die Bilder liegen schon dort
 
 Danach einmal *Alle Metadaten ersetzen* auf die Bibliothek, damit Emby die neuen NFOs/Bilder übernimmt.
+
+## Jellyfin statt Emby
+
+Scraparr spricht beide Server über dieselbe Einstellung *Einstellungen → Medienserver*. Der Typ wird automatisch
+erkannt (oder fest auf *Emby*/*Jellyfin* gestellt); Abgleich, gezieltes Neu-Einlesen, Kollektionen und Bild-Upload
+funktionieren gleich. API-Schlüssel in Jellyfin: *Dashboard → Erweitert → API-Schlüssel → +*.
+
+Jellyfin-Bibliothek (*Dashboard → Bibliotheken → Bibliothek verwalten*):
+
+* **Bevorzugte Sprache:** Deutsch · **Land:** Deutschland
+* **Metadaten-Leser:** `Nfo` aktiv und ganz oben
+* **Metadaten-Downloader / Bildabrufer:** TheMovieDb, TheTVDB, OMDb usw. **deaktivieren**
+* **Metadaten-Speicher `Nfo`:** **aus**
+* Unter *Bibliothek → Filme* „Filme automatisch zu Sammlungen hinzufügen“ ausschalten, wenn Scraparr die
+  Kollektionen pflegen soll
+
+Danach *Bibliothek scannen → Alle Metadaten ersetzen* (Bilder ersetzen anhaken).
 
 **FSK:** Standardformat ist `FSK-12`. Zeigt Emby die Freigabe nicht korrekt an, in den Einstellungen
 auf `DE-{age}` umstellen und die betroffenen Titel neu scrapen.
@@ -183,9 +200,9 @@ TMDB, „2 von 4 vorhanden“ und der Liste der fehlenden Teile (unveröffentlic
 Tipp: In Emby unter *Bibliothek → Filme* die eingebaute Option „Filme automatisch zu Sammlungen gruppieren“
 ausschalten, sonst legt Emby parallel eigene (englische) Sammlungen an.
 
-## Abgleich mit Emby, Radarr und Sonarr
+## Abgleich mit Emby/Jellyfin, Radarr und Sonarr
 
-Neuer Reiter **Abgleich**. Einrichtung unter *Einstellungen → Emby* bzw. *Radarr & Sonarr* (URL + API-Key).
+Neuer Reiter **Abgleich**. Einrichtung unter *Einstellungen → Medienserver* bzw. *Radarr & Sonarr* (URL + API-Key).
 
 **Pfadzuordnung:** Sehen Emby/Radarr/Sonarr die Dateien unter anderen Pfaden als Scraparr (typisch bei
 mehreren Containern), je Dienst eine Zeile `Pfad dort => Pfad hier` eintragen, z. B. `/movies => /media/filme`.

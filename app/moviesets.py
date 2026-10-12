@@ -174,8 +174,8 @@ def emby_sync(coll_ids=None, force_images=False, progress=None):
             db.execute("UPDATE collections SET emby_id=?, emby_synced=? WHERE tmdb_id=?", (bid, db.now(), cid))
             done += 1
             if progress:
-                progress(f"Emby-Kollektion: {row['name']}")
+                progress(f"{emby.name()}-Kollektion: {row['name']}")
         except SourceError as e:
-            db.log("WARN", f"Emby-Kollektion „{row['name']}“: {e}")
-    db.log("INFO", f"Emby: {done} Kollektion(en) angelegt/aktualisiert")
+            db.log("WARN", f"{emby.name()}-Kollektion „{row['name']}“: {e}")
+    db.log("INFO", f"{emby.name()}: {done} Kollektion(en) angelegt/aktualisiert")
     return done

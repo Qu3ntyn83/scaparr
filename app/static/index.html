@@ -37,7 +37,7 @@
   </div>
   <div class="top-actions">
     <button class="btn ghost" id="btn-scan" title="Bibliotheken neu einlesen">⟳<span class="lbl"> Scannen</span></button>
-    <button class="btn" id="btn-auto" title="Scan + neue Titel scrapen + Emby aktualisieren">▶<span class="lbl"> Auto-Lauf</span></button>
+    <button class="btn" id="btn-auto" title="Scan + neue Titel scrapen + Medienserver aktualisieren">▶<span class="lbl"> Auto-Lauf</span></button>
   </div>
 </header>
 
@@ -100,11 +100,11 @@
       <option value="">Alle</option>
       <option value="incomplete">Unvollständig</option>
       <option value="complete">Vollständig</option>
-      <option value="noemby">Noch nicht in Emby</option>
+      <option value="noemby">Noch nicht im Medienserver</option>
     </select>
     <div class="grow"></div>
     <button class="btn small ghost" id="sets-refresh" title="Namen, Texte und Bilder aller Reihen neu von TMDB laden">⟳ Von TMDB laden</button>
-    <button class="btn small" id="sets-emby" title="Kollektionen in Emby anlegen bzw. aktualisieren">Nach Emby übertragen</button>
+    <button class="btn small" id="sets-emby" title="Kollektionen im Medienserver anlegen bzw. aktualisieren">Nach <span class="srv">Emby</span> übertragen</button>
   </div>
   <div class="hint" id="sets-info"></div>
   <div class="sets-grid" id="sets-grid"></div>
@@ -116,7 +116,7 @@
 </dialog>
 
 <main id="view-sync" class="page hidden">
-  <div class="page-head"><h2>Abgleich</h2><span class="hint">Emby · Radarr · Sonarr – Pfade, IDs, Episodennummern, Darstellung in Emby</span></div>
+  <div class="page-head"><h2>Abgleich</h2><span class="hint"><span class="srv">Emby</span> · Radarr · Sonarr – Pfade, IDs, Episodennummern, Darstellung in <span class="srv">Emby</span></span></div>
   <div id="sync-cards"></div>
 </main>
 
@@ -147,7 +147,7 @@
         <label>Land (FSK) <input name="country" placeholder="DE"></label>
       </div>
       <label>FSK-Format in der NFO <input name="fsk_format" placeholder="FSK-{age}">
-        <small>{age} = Altersstufe. Emby versteht z. B. <code>FSK-12</code> oder <code>DE-12</code>.</small></label>
+        <small>{age} = Altersstufe. Emby/Jellyfin verstehen z. B. <code>FSK-12</code> oder <code>DE-12</code>.</small></label>
     </fieldset>
 
     <fieldset><legend>Weitere Quellen</legend>
@@ -208,7 +208,7 @@
           <option value="tmdb,ofdb,wikidata">TMDB → OFDb → Wikidata</option>
           <option value="wikidata,ofdb,tmdb">Wikidata → OFDb → TMDB</option>
           <option value="tmdb">nur TMDB</option></select></label>
-        <label>Hauptwertung in Emby <select name="rating_default">
+        <label>Hauptwertung im Medienserver <select name="rating_default">
           <option value="imdb">IMDb (via OMDb)</option><option value="tmdb">TMDB</option></select></label>
       </div>
       <div class="cols2">
@@ -233,10 +233,10 @@
       <label class="chk"><input type="checkbox" name="collections_enabled"> Filmreihen von TMDB laden (deutsche Namen, Texte, Poster)</label>
       <div class="cols2">
         <label>Kollektion ab <input name="collection_min_movies" type="number" min="1" max="10"><small>eigenen Filmen einer Reihe anlegen</small></label>
-        <label class="chk inline"><input type="checkbox" name="collections_to_emby"> In Emby anlegen und aktuell halten</label>
+        <label class="chk inline"><input type="checkbox" name="collections_to_emby"> <span>In <span class="srv">Emby</span> anlegen und aktuell halten</span></label>
       </div>
       <label>Bilder zusätzlich in Ordner ablegen (optional) <input name="collection_art_folder" placeholder="/media/filme/_Kollektionen">
-        <small>Für Kodi/tMM-„Movie Set“-Ordner: je Reihe <code>&lt;Name&gt;/poster.jpg</code> und <code>fanart.jpg</code>. Für Emby nicht nötig.</small></label>
+        <small>Für Kodi/tMM-„Movie Set“-Ordner: je Reihe <code>&lt;Name&gt;/poster.jpg</code> und <code>fanart.jpg</code>. Für Emby/Jellyfin nicht nötig.</small></label>
     </fieldset>
 
     <fieldset><legend>Bibliotheken</legend>
@@ -284,19 +284,24 @@
       <small>Platzhalter: <code>{title}</code> <code>{original_title}</code> <code>{year}</code> <code>{fsk}</code> <code>{tmdb_id}</code> · Serien: <code>{showtitle}</code> <code>{eps}</code> (S01E01E02) <code>{season:02d}</code> <code>{episode:02d}</code> <code>{title}</code></small>
     </fieldset>
 
-    <fieldset><legend>Emby</legend>
+    <fieldset><legend>Medienserver (Emby / Jellyfin)</legend>
       <div class="cols2">
+        <label>Server <select name="media_server">
+          <option value="auto">Automatisch erkennen</option>
+          <option value="emby">Emby</option>
+          <option value="jellyfin">Jellyfin</option></select></label>
         <label>Server-URL <input name="emby_url" placeholder="http://192.168.1.10:8096"></label>
-        <label>API-Key <input name="emby_api_key" type="password" placeholder="Emby → Erweitert → API-Schlüssel"></label>
       </div>
+      <label>API-Key <input name="emby_api_key" type="password" placeholder="Emby: Einstellungen → Erweitert → API-Schlüssel · Jellyfin: Dashboard → API-Schlüssel">
+        <small>Jellyfin: Dashboard → Erweitert → API-Schlüssel → <i>+</i>. Emby: Einstellungen → Erweitert → API-Schlüssel.</small></label>
       <div class="cols2">
-        <label class="chk inline"><input type="checkbox" name="emby_refresh_after_job"> Emby nach Änderungen aktualisieren</label>
+        <label class="chk inline"><input type="checkbox" name="emby_refresh_after_job"> <span><span class="srv">Emby</span> nach Änderungen aktualisieren</span></label>
         <label>Art der Aktualisierung <select name="emby_refresh_mode">
           <option value="item">Nur geänderte Titel neu einlesen (empfohlen)</option>
           <option value="library">Ganze Bibliothek scannen</option></select></label>
       </div>
       <label>Pfadzuordnung <textarea name="emby_path_map" rows="2" class="mono" placeholder="/mnt/medien/filme => /media/filme"></textarea>
-        <small>Nur nötig, wenn Emby die Dateien unter anderen Pfaden sieht als Scraparr. Eine Zeile je Zuordnung: <code>Pfad bei Emby =&gt; Pfad hier</code></small></label>
+        <small>Nur nötig, wenn der Medienserver die Dateien unter anderen Pfaden sieht als Scraparr. Eine Zeile je Zuordnung: <code>Pfad beim Server =&gt; Pfad hier</code></small></label>
       <div class="row"><button class="btn small ghost" type="button" id="test-emby">Verbindung testen</button><span class="hint" id="test-emby-res"></span></div>
     </fieldset>
 

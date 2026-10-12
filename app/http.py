@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-UA = "Scraparr/1.2 (+self-hosted; TMDB/TVDB/fanart.tv/OMDb/OFDb/Wikidata)"
+UA = "Scraparr/1.4 (+self-hosted; TMDB/TVDB/fanart.tv/OMDb/OFDb/Wikidata)"
 _locks: dict[str, threading.Lock] = {}
 _last: dict[str, float] = {}
 _glock = threading.Lock()

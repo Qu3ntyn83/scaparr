@@ -123,7 +123,7 @@ def job_collections(action, ids=None):
         _progress("Kollektionen von TMDB laden …")
         moviesets.refresh(ids, force=True, progress=_progress)
     else:
-        _progress("Kollektionen in Emby pflegen …")
+        _progress(f"Kollektionen in {emby.name()} pflegen …")
         moviesets.emby_sync(ids, force_images=bool(ids), progress=_progress)
     return False
 
@@ -198,7 +198,7 @@ def job_sync(system):
     _progress(f"Abgleich mit {system.capitalize()} …")
     if system == "emby":
         save_report("emby", emby.sync())
-        db.log("INFO", "Emby-Abgleich fertig")
+        db.log("INFO", f"{emby.name()}-Abgleich fertig")
         return False
     job_scan("movies" if system == "radarr" else "tv")
     _progress(f"Abgleich mit {system.capitalize()} …")
