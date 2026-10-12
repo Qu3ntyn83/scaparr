@@ -1,6 +1,6 @@
 # Scraparr
 
-tinyMediaManager-Nachbau mit Webfrontend: scrapt Filme und Serien **komplett auf Deutsch** von TMDB
+**Scraparr** ist ein Scraper für Filme und Serien **komplett auf Deutsch** von TMDB
 und legt alles so ab, dass **Emby oder Jellyfin** (und Kodi) es lokal einliest.
 
 ## Was er macht
