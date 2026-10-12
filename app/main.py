@@ -16,7 +16,7 @@ from . import (animelists, arr, artpicker, config, db, emby, fanart, fernsehseri
                scraper, tmdb, trakt, tvdb, wikidata)
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 NO_CACHE = {"Cache-Control": "no-cache"}
 CACHE = os.path.join(db.DATA_DIR, "cache")
 SECRET_KEYS = ("tmdb_api_key", "emby_api_key", "tvdb_api_key", "tvdb_pin", "fanart_api_key",

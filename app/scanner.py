@@ -65,10 +65,17 @@ def _scan_movie_dir(root, dirpath, vids, seen, progress=None):
     for v in vids:
         seen.add(v)
         status = paths.movie_status(v, single)
-        existing = db.one("SELECT id FROM movies WHERE path=?", (v,))
+        existing = db.one("SELECT id, status, tmdb_id, guess_title, guess_year FROM movies WHERE path=?", (v,))
         if existing:
+            extra = {}
+            if existing["status"] in ("neu", "manuell", "fehler") and not existing["tmdb_id"]:
+                # noch nicht zugeordnet: Suchtitel mit der aktuellen Erkennung neu bestimmen
+                g = parser.guess_movie(v, single)
+                if (g["title"], g["year"]) != (existing["guess_title"], existing["guess_year"]):
+                    extra = {"guess_title": g["title"], "guess_year": g["year"], "title": g["title"],
+                             "year": g["year"], "status": "neu", "message": None}
             db.update("movies", existing["id"], single_folder=int(single), missing=0,
-                      **{k: int(x) for k, x in status.items()})
+                      **{k: int(x) for k, x in status.items()}, **extra)
             continue
         g = parser.guess_movie(v, single)
         nfo = paths.existing_movie_nfo(v, single)
