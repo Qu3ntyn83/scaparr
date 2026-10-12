@@ -57,6 +57,11 @@ CREATE TABLE IF NOT EXISTS log (
     ts TEXT, level TEXT, msg TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_ep_show ON episodes(show_id);
+CREATE INDEX IF NOT EXISTS idx_movies_folder ON movies(folder);
+CREATE INDEX IF NOT EXISTS idx_movies_status ON movies(status);
+CREATE INDEX IF NOT EXISTS idx_movies_tmdb ON movies(tmdb_id);
+CREATE INDEX IF NOT EXISTS idx_shows_status ON shows(status);
+CREATE INDEX IF NOT EXISTS idx_ep_status ON episodes(status);
 CREATE TABLE IF NOT EXISTS sync (system TEXT PRIMARY KEY, ts TEXT, data TEXT);
 CREATE TABLE IF NOT EXISTS collections (
     tmdb_id INTEGER PRIMARY KEY,
@@ -79,6 +84,7 @@ def conn():
         c = sqlite3.connect(DB_PATH, timeout=30)
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA foreign_keys=ON")
+        c.execute("PRAGMA synchronous=NORMAL")      # mit WAL sicher, spart ein fsync pro Schreibvorgang
         try:
             yield c
             c.commit()
@@ -151,10 +157,16 @@ def update(table, rid, **fields):
     execute(f"UPDATE {table} SET {cols} WHERE id=?", (*fields.values(), rid))
 
 
+_log_n = 0
+
+
 def log(level: str, msg: str):
     print(f"[{level}] {msg}", flush=True)
     try:
         execute("INSERT INTO log (ts, level, msg) VALUES (?,?,?)", (now(), level, msg))
-        execute("DELETE FROM log WHERE id < (SELECT MAX(id) - 2000 FROM log)")
+        global _log_n
+        _log_n += 1
+        if _log_n % 100 == 0:      # Kürzen nur gelegentlich statt bei jeder Zeile
+            execute("DELETE FROM log WHERE id < (SELECT MAX(id) - 2000 FROM log)")
     except sqlite3.Error:
         pass

@@ -99,19 +99,29 @@ def _coerce(key, value):
     return "" if value is None else str(value)
 
 
+_cache = {"db": None, "data": None}
+
+
 def get_all() -> dict:
+    """Einstellungen; im Speicher gehalten (get() läuft pro Datei im Scan), save() leert den Cache."""
+    if _cache["data"] is not None and _cache["db"] == db.DB_PATH:
+        return dict(_cache["data"])
     data = dict(DEFAULTS)
     for r in db.query("SELECT key, value FROM settings"):
         if r["key"] in DEFAULTS:
             data[r["key"]] = _coerce(r["key"], json.loads(r["value"]))
-    return data
+    _cache.update(db=db.DB_PATH, data=data)
+    return dict(data)
 
 
 def get(key):
+    if _cache["data"] is not None and _cache["db"] == db.DB_PATH:
+        return _cache["data"][key]
     return get_all()[key]
 
 
 def save(values: dict):
+    _cache["data"] = None
     for k, v in values.items():
         if k not in DEFAULTS:
             continue

@@ -60,6 +60,8 @@ def _collect(typ, row):
     for c in merged.get("fanart", []):
         if c["source"] == "tmdb" and c.get("lang"):
             merged.setdefault("landscape", []).append(dict(c))
+    for k in [k for k, v in _cache.items() if time.time() - v[0] >= CACHE_SEC]:
+        del _cache[k]                      # abgelaufene Einträge verwerfen
     _cache[key] = (time.time(), merged)
     return merged
 
