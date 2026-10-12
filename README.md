@@ -105,7 +105,7 @@ Neue Episoden einer bekannten Serie werden automatisch nachgescrapt.
 
 ```bash
 # auf dem Docker-Host
-git clone https://github.com/Qu3ntyn83/scaparr.git /opt/scraparr
+git clone https://github.com/Qu3ntyn83/scraparr.git /opt/scraparr
 cd /opt/scraparr
 cp docker-compose.example.yml docker-compose.yml
 nano docker-compose.yml        # Medienpfade, PUID/PGID, Emby-/Jellyfin-URL anpassen
