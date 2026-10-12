@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import unicodedata
 
 import httpx
@@ -189,11 +190,17 @@ def _download(url, dest, force=False):
         return False
 
 
+_yt_block = {"until": 0.0}      # YouTube-Sperre: bis dahin keine weiteren Versuche (jeder Versuch verschlimmert sie)
+YT_PAUSE_SEC = 1800
+
+
 def download_trailer(trailer, dest, force=False):
     if not trailer or config.get("trailer_mode") != "download":
         return False
     if os.path.exists(dest) and not force:
         return True
+    if time.time() < _yt_block["until"]:
+        return False                # Trailer bleibt als Link in der NFO; nächster Versuch nach der Pause
     ytdlp = shutil.which("yt-dlp")
     if not ytdlp:
         db.log("WARN", "yt-dlp nicht installiert – Trailer nur als Link in der NFO.")
@@ -231,8 +238,9 @@ def download_trailer(trailer, dest, force=False):
         if not shutil.which("deno"):
             msg += " (Deno fehlt – Image mit aktuellem Dockerfile neu bauen)"
         if "not a bot" in msg or "Sign in" in msg:
+            _yt_block["until"] = time.time() + YT_PAUSE_SEC
             msg = ("YouTube verlangt eine Anmeldung (Bot-Schutz). Abhilfe: cookies.txt aus dem Browser exportieren "
-                   "und als /data/cookies.txt ablegen – siehe README") + (
+                   "und als /data/cookies.txt ablegen – siehe README. Weitere Downloads pausieren 30 Minuten") + (
                    " [Cookies wurden verwendet, sind evtl. abgelaufen]" if ctmp else "")
         db.log("WARN", f"Trailer-Download fehlgeschlagen ({trailer['url']}): {msg}")
     except subprocess.TimeoutExpired:
