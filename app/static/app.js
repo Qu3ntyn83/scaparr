@@ -428,7 +428,8 @@ $("#detail").addEventListener("click", (e) => {
 async function runJob(url, body) {
   try {
     const r = await api("POST", url, body);
-    toast(`Gestartet: ${r.started}`);
+    toast(r.duplicate ? `Wartet bereits: ${r.started}`
+      : r.queued ? `In Warteschlange (läuft nach „${r.after}“): ${r.started}` : `Gestartet: ${r.started}`);
     pollStatus();
   } catch (e) { toast(e.message, true); }
 }
@@ -548,7 +549,7 @@ async function pollStatus() {
     $("#job-run").classList.toggle("hidden", !j.running);
     if (j.running) {
       $("#job-name").textContent = j.name;
-      $("#job-current").textContent = j.current || "";
+      $("#job-current").textContent = (j.current || "") + ((j.queue || []).length ? `  · +${j.queue.length} in Warteschlange` : "");
       const bar = $("#job-bar").parentElement;
       bar.classList.toggle("indet", !j.total);
       $("#job-bar").style.width = j.total ? `${Math.round((j.done / j.total) * 100)}%` : "0";

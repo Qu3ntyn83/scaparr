@@ -145,6 +145,12 @@ git pull
 docker compose up -d --build
 ```
 
+**Warteschlange:** Startest du eine Aktion (Scrapen, Umbenennen, Verschmelzen, Scan …), während schon ein Lauf aktiv ist,
+wird sie eingereiht und automatisch danach ausgeführt – in der Reihenfolge, in der du sie gestartet hast. Die Statusleiste zeigt
+„+N in Warteschlange". Dieselbe Aufgabe wird nicht doppelt eingereiht. **✕ Abbrechen** stoppt den laufenden Job und leert die
+Warteschlange. Umbenennen berechnet seine Pläne erst beim Ausführen, damit ein davor laufender Scrape berücksichtigt wird.
+Webhook-Aufgaben und der automatische Lauf warten wie bisher auf den nächsten freien Moment.
+
 **Von Hand verschmelzen:** Hat die Erkennung zwei Dateien nicht als Teile desselben Films erkannt (z. B. `a.avi` und `b.avi`
 in getrennten Ordnern), in der Filmliste beide markieren und **Verschmelzen** klicken. Scraparr zeigt vorher die Reihenfolge
 (natürlich nach Dateinamen sortiert) und die neuen Namen. Danach heißen die Teile `<Name>-cd1`, `<Name>-cd2` im Filmordner,

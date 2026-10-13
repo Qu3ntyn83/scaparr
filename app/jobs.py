@@ -12,7 +12,7 @@ from .http import SourceError
 
 _lock = threading.Lock()
 state = {"running": False, "name": None, "done": 0, "total": 0, "current": "",
-         "started": None, "last_auto": None, "next_auto": None, "cancel": False, "pending": 0}
+         "started": None, "last_auto": None, "next_auto": None, "cancel": False, "pending": 0, "queue": []}
 
 
 def _progress(msg):
@@ -25,33 +25,78 @@ def _step():
         raise InterruptedError
 
 
-def start(name, fn, *args):
-    """Startet einen Job in einem Thread. False, wenn schon einer läuft."""
-    if not _lock.acquire(blocking=False):
-        return False
+_qlock = threading.Lock()
+_queue = []          # wartende Jobs: (Name, Funktion, Argumente)
 
-    def run():
-        state.update(running=True, name=name, done=0, total=0, current="", cancel=False,
-                     started=datetime.now().isoformat(timespec="seconds"))
-        changed = False
-        emby.take_touched()          # Reste eines früheren Jobs verwerfen
-        try:
-            changed = fn(*args)
-        except InterruptedError:
-            db.log("WARN", f"Job abgebrochen: {name}")
-        except (tmdb.TMDBError, SourceError) as e:
-            db.log("ERROR", f"Job '{name}' gestoppt: {e}")
-        except Exception as e:  # noqa – Job darf den Server nie mitreißen
-            db.log("ERROR", f"Job '{name}' Fehler: {type(e).__name__}: {e}")
-        finally:
-            touched = emby.take_touched()
-            if changed and touched:
-                emby.notify(touched)
+
+def _sync_queue_state():
+    state["queue"] = [n for n, _, _ in _queue]
+
+
+def _run_one(name, fn, args):
+    state.update(running=True, name=name, done=0, total=0, current="", cancel=False,
+                 started=datetime.now().isoformat(timespec="seconds"))
+    changed = False
+    emby.take_touched()          # Reste eines früheren Jobs verwerfen
+    try:
+        changed = fn(*args)
+    except InterruptedError:
+        db.log("WARN", f"Job abgebrochen: {name}")
+    except (tmdb.TMDBError, SourceError) as e:
+        db.log("ERROR", f"Job '{name}' gestoppt: {e}")
+    except Exception as e:  # noqa – Job darf den Server nie mitreißen
+        db.log("ERROR", f"Job '{name}' Fehler: {type(e).__name__}: {e}")
+    finally:
+        touched = emby.take_touched()
+        if changed and touched:
+            emby.notify(touched)
+
+
+def _worker(name, fn, args):
+    """Führt den Job aus und danach alle in der Zwischenzeit eingereihten – lückenlos, ohne den Lauf-Status
+    zwischendurch auf „bereit“ zu setzen."""
+    while True:
+        _run_one(name, fn, args)
+        with _qlock:
+            if _queue:
+                name, fn, args = _queue.pop(0)
+                _sync_queue_state()
+                db.log("INFO", f"Nächster Job aus der Warteschlange: {name}")
+                continue
             state.update(running=False, name=None, current="", cancel=False)
             _lock.release()
+            return
 
-    threading.Thread(target=run, daemon=True).start()
+
+def start(name, fn, *args):
+    """Startet einen Job in einem Thread. False, wenn schon einer läuft."""
+    with _qlock:
+        if not _lock.acquire(blocking=False):
+            return False
+    threading.Thread(target=_worker, args=(name, fn, args), daemon=True).start()
     return True
+
+
+def submit(name, fn, *args):
+    """Startet den Job oder reiht ihn ein, wenn gerade einer läuft. -> "started" | "queued" | "duplicate"."""
+    with _qlock:
+        if _lock.acquire(blocking=False):
+            threading.Thread(target=_worker, args=(name, fn, args), daemon=True).start()
+            return "started"
+        if any(n == name and a == args for n, _, a in _queue):
+            return "duplicate"                         # genau dieselbe Aufgabe wartet schon
+        _queue.append((name, fn, args))
+        _sync_queue_state()
+        db.log("INFO", f"Eingereiht (läuft nach „{state['name']}“): {name}")
+        return "queued"
+
+
+def clear_queue():
+    with _qlock:
+        n = len(_queue)
+        _queue.clear()
+        _sync_queue_state()
+    return n
 
 
 # ---------------------------------------------------------------- Job-Funktionen
@@ -209,6 +254,12 @@ def job_merge(ids):
     db.log("INFO", f"Zu einem Film verschmolzen: {m.get('title') or m.get('guess_title')} ({len(parts)} Teile)")
     _step()
     return True
+
+
+def job_rename_ids(movie_ids, show_ids):
+    """Umbenennen mit Plänen, die erst jetzt berechnet werden (wichtig, wenn der Job warten musste)."""
+    plans = renamer.preview(list(movie_ids), list(show_ids))
+    return job_rename(plans)
 
 
 def job_rename(plans):

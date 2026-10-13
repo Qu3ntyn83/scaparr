@@ -129,9 +129,10 @@ class Ids(BaseModel):
 
 
 def _start(name, fn, *args):
-    if not jobs.start(name, fn, *args):
-        raise HTTPException(409, f"Es läuft bereits ein Job: {jobs.state['name']}")
-    return {"started": name}
+    """Job starten – läuft gerade einer, wird der neue eingereiht und danach automatisch ausgeführt."""
+    r = jobs.submit(name, fn, *args)
+    return {"started": name, "queued": r == "queued", "duplicate": r == "duplicate",
+            "after": jobs.state["name"] if r != "started" else None}
 
 
 @app.post("/api/scan/{kind}")
@@ -149,8 +150,10 @@ def auto_run():
 
 @app.post("/api/job/cancel")
 def cancel():
+    """Laufenden Job abbrechen und die Warteschlange leeren."""
+    dropped = jobs.clear_queue()
     jobs.state["cancel"] = True
-    return {"ok": True}
+    return {"ok": True, "dropped": dropped}
 
 
 @app.post("/api/emby/refresh")
@@ -432,8 +435,8 @@ def movies_stack(body: dict):
     todo = [r["id"] for r in rows if r and renamer.plan_stack(r)]
     if not todo:
         return {"started": None, "count": 0}
-    _start(f"{len(todo)} Mehrteiler zusammenführen", jobs.job_stack, todo)
-    return {"started": True, "count": len(todo)}
+    res = _start(f"{len(todo)} Mehrteiler zusammenführen", jobs.job_stack, todo)
+    return {**res, "started": True, "count": len(todo)}
 
 
 @app.post("/api/movies/merge/preview")
@@ -463,8 +466,9 @@ def rename_apply(body: RenameReq):
     plans = renamer.preview(body.movie_ids, body.show_ids)   # serverseitig neu berechnen
     if not plans:
         return {"started": None, "count": 0}
-    _start(f"{len(plans)} Datei(en) umbenennen", jobs.job_rename, plans)
-    return {"started": True, "count": len(plans)}
+    # die Pläne werden erst beim Ausführen berechnet – ein davor laufender Job kann Titel/Pfade geändert haben
+    res = _start(f"{len(plans)} Datei(en) umbenennen", jobs.job_rename_ids, body.movie_ids, body.show_ids)
+    return {**res, "started": True, "count": len(plans)}
 
 
 # ---------------------------------------------------------------- Protokoll
