@@ -23,26 +23,44 @@ def enabled():
     return bool(config.get("wikidata_enabled"))
 
 
+MAXLAG_RETRIES = 3
+
+
 def _get(params):
     if time.time() < _pause["until"]:
-        raise SourceError("Wikidata pausiert (Rate-Limit)")
+        raise SourceError("Wikidata pausiert (Rate-Limit/Server-Verzögerung)")
     # Wikimedia blockt httpx-Clients (403) – urllib wird akzeptiert
-    _throttle("www.wikidata.org", 1.0)
     url = API + "?" + urllib.parse.urlencode({**params, "format": "json", "maxlag": 5})
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    try:
-        with urllib.request.urlopen(req, timeout=25) as r:
-            data = json.load(r)
-    except urllib.error.HTTPError as e:
-        if e.code == 429:
-            _pause["until"] = time.time() + 600
-            raise SourceError("Wikidata: Rate-Limit (429) – pausiere 10 Minuten")
-        raise SourceError(f"Wikidata: HTTP {e.code}")
-    except (urllib.error.URLError, TimeoutError, ValueError) as e:
-        raise SourceError(f"Wikidata: {e}")
-    if "error" in data:
-        raise SourceError(f"Wikidata: {data['error'].get('info', data['error'])}")
-    return data
+    for attempt in range(MAXLAG_RETRIES):
+        _throttle("www.wikidata.org", 1.0)
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        try:
+            with urllib.request.urlopen(req, timeout=25) as r:
+                data = json.load(r)
+                retry_after = r.headers.get("Retry-After")
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                _pause["until"] = time.time() + 600
+                raise SourceError("Wikidata: Rate-Limit (429) – pausiere 10 Minuten")
+            raise SourceError(f"Wikidata: HTTP {e.code}")
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            raise SourceError(f"Wikidata: {e}")
+        err = data.get("error")
+        if err and err.get("code") == "maxlag":
+            # Wikidata-Datenbank hängt kurz hinterher: laut Wikimedia-Regeln kurz warten und wiederholen
+            if attempt < MAXLAG_RETRIES - 1:
+                try:
+                    wait = min(max(float(retry_after), 1.0), 15.0)
+                except (TypeError, ValueError):
+                    wait = 5.0
+                time.sleep(wait)
+                continue
+            _pause["until"] = time.time() + 120          # nicht weiter belasten; nächster Film versucht es später
+            raise SourceError("Wikidata ist gerade verzögert – pausiere 2 Minuten (FSK kommt von anderen Quellen)")
+        if err:
+            raise SourceError(f"Wikidata: {err.get('info', err)}")
+        return data
+    raise SourceError("Wikidata: keine Antwort")
 
 
 def _find(prop, value):
