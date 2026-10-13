@@ -436,6 +436,28 @@ def movies_stack(body: dict):
     return {"started": True, "count": len(todo)}
 
 
+@app.post("/api/movies/merge/preview")
+def movies_merge_preview(body: dict):
+    try:
+        main, rest, parts = renamer.merge_prepare((body or {}).get("ids", []))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    plan = renamer.plan_stack(main)
+    return {"title": main.get("title") or main.get("guess_title"), "parts": parts,
+            "targets": [d for _, d in plan["parts"]] if plan else parts,
+            "new_folder": plan["new_folder"] if plan else main["folder"]}
+
+
+@app.post("/api/movies/merge")
+def movies_merge(body: dict):
+    ids = [int(i) for i in (body or {}).get("ids", [])]
+    try:
+        renamer.merge_prepare(ids)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return _start("Filme zu einem verschmelzen", jobs.job_merge, ids)
+
+
 @app.post("/api/rename/apply")
 def rename_apply(body: RenameReq):
     plans = renamer.preview(body.movie_ids, body.show_ids)   # serverseitig neu berechnen

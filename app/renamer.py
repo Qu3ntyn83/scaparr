@@ -102,6 +102,43 @@ def plan_stack(m):
             "new_folder": folder, "parts": list(zip(parts, targets)), "own_folder": folder != m["folder"]}
 
 
+def _natkey(path):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", path)]
+
+
+MERGE_FIELDS = ("tmdb_id", "imdb_id", "title", "original_title", "year", "fsk", "meta", "status", "message",
+                "guess_title", "guess_year")
+
+
+def merge_prepare(ids):
+    """Mehrere Filmeinträge zu einem mehrteiligen Film verschmelzen (Vorbereitung ohne Änderungen).
+    -> (Hauptzeile mit part_files, übrige Zeilen, Teileliste)"""
+    ids = list(dict.fromkeys(int(i) for i in ids))
+    if len(ids) < 2:
+        raise ValueError("Mindestens zwei Filme auswählen")
+    rows = [db.one("SELECT * FROM movies WHERE id=?", (i,)) for i in ids]
+    if not all(rows):
+        raise ValueError("Ein ausgewählter Film existiert nicht mehr – Liste neu laden")
+    tmdb = {r["tmdb_id"] for r in rows if r.get("tmdb_id")}
+    if len(tmdb) > 1:
+        raise ValueError("Die Einträge sind verschiedenen TMDB-Filmen zugeordnet – das sind keine Teile eines Films")
+    parts = []
+    for r in rows:
+        for p in (r.get("part_files") or [r["path"]]):
+            if p not in parts:
+                parts.append(p)
+    parts.sort(key=lambda p: _natkey(os.path.basename(p)))
+    # Hauptzeile: bevorzugt der Eintrag in eigenem Filmordner, dann der bereits zugeordnete
+    rows.sort(key=lambda r: (not r.get("single_folder"), not r.get("tmdb_id"), r["id"]))
+    main, rest = dict(rows[0]), rows[1:]
+    donor = next((r for r in [rows[0]] + rest if r.get("tmdb_id")), None)
+    if donor and not main.get("tmdb_id"):
+        for k in MERGE_FIELDS:
+            main[k] = donor.get(k)
+    main["part_files"] = parts
+    return main, rest, parts
+
+
 def plan_movie(m):
     meta = m.get("meta") or {}
     if not meta:
@@ -254,7 +291,8 @@ def _apply_movie(p):
         os.rename(folder, new_folder)
         old = os.path.join(new_folder, os.path.relpath(old, folder))
     if p.get("parts"):
-        pairs = [(os.path.join(new_folder, os.path.relpath(src, folder)), dst) for src, dst in p["parts"]]
+        pairs = [(os.path.join(new_folder, os.path.relpath(src, folder)) if folder != new_folder else src, dst)
+                 for src, dst in p["parts"]]
         _move_parts(pairs)
         done = [dst for _, dst in pairs]
         for src, _ in pairs:

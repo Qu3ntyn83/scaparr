@@ -145,6 +145,13 @@ git pull
 docker compose up -d --build
 ```
 
+**Von Hand verschmelzen:** Hat die Erkennung zwei Dateien nicht als Teile desselben Films erkannt (z. B. `a.avi` und `b.avi`
+in getrennten Ordnern), in der Filmliste beide markieren und **Verschmelzen** klicken. Scraparr zeigt vorher die Reihenfolge
+(natürlich nach Dateinamen sortiert) und die neuen Namen. Danach heißen die Teile `<Name>-cd1`, `<Name>-cd2` im Filmordner,
+die übrigen Einträge verschwinden, die NFO wird neu geschrieben. Nur für CD1/CD2 – zwei *Fassungen* desselben Films
+(z. B. 1080p und 4K) sind etwas anderes. Einträge mit unterschiedlicher TMDB-Zuordnung werden nicht verschmolzen.
+Ein Rest-Ordner mit alter NFO/Postern bleibt ggf. zurück und kann gelöscht werden.
+
 **Ordnername als Hilfe:** Taugt der Dateiname nicht als Titel (z. B. `movie.mkv`, `00001.mkv`, nur Zahlen), gilt der Ordnername
 zuerst. Findet die Suche mit dem Dateinamen keinen sicheren Treffer, versucht Scraparr es zusätzlich mit dem Ordnernamen
 (und umgekehrt). Es zählen nur sichere Treffer – alles andere landet wie bisher in der manuellen Zuordnung.

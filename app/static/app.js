@@ -147,6 +147,8 @@ function updateSel() {
   $("#btn-scrape").textContent = n ? `${n} scrapen` : "Alle offenen scrapen";
   $("#btn-rescrape").disabled = !n;
   $("#btn-rename").disabled = !n;
+  $("#btn-merge").classList.toggle("hidden", S.view !== "movies");
+  $("#btn-merge").disabled = n < 2;
   const vis = filtered();
   $("#sel-all").checked = vis.length > 0 && vis.every((i) => S.selected.has(i.id));
 }
@@ -438,6 +440,18 @@ $("#job-cancel").addEventListener("click", () => api("POST", "/api/job/cancel").
 $("#btn-scrape").addEventListener("click", () => runJob(`${base()}/scrape`, { ids: [...S.selected], force: false }));
 $("#btn-rescrape").addEventListener("click", () => runJob(`${base()}/scrape`, { ids: [...S.selected], force: true }));
 $("#btn-rename").addEventListener("click", () => openRename([...S.selected]));
+$("#btn-merge").addEventListener("click", async () => {
+  const ids = [...S.selected];
+  try {
+    const r = await api("POST", "/api/movies/merge/preview", { ids });
+    const name = (p) => p.split("/").pop();
+    const ok = confirm(`„${r.title || "Film"}“ aus ${r.parts.length} Dateien zu EINEM Film verschmelzen?\n\n` +
+      r.parts.map((p, i) => `Teil ${i + 1}: ${name(p)}\n   → ${name(r.targets[i])}`).join("\n") +
+      `\n\nDie Dateien werden umbenannt/verschoben, die übrigen Einträge entfernt. ` +
+      `Gedacht für CD1/CD2 – nicht für zwei Fassungen desselben Films.`);
+    if (ok) { await runJob("/api/movies/merge", { ids }); S.selected.clear(); }
+  } catch (e) { toast(e.message, true); }
+});
 $("#btn-themes").addEventListener("click", () => runJob("/api/shows/themes", { ids: [...S.selected], force: false }));
 
 // ------------------------------------------------------------ Suche

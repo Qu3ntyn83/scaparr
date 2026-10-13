@@ -163,16 +163,52 @@ def job_stack(movie_ids):
                                   if os.path.exists(d) and os.path.normcase(s) != os.path.normcase(d)), None)
             done, errors = renamer.apply([p])
             if done:
-                m = db.one("SELECT * FROM movies WHERE id=?", (mid,))
-                if m.get("meta"):
-                    nfo.write_movie(paths.movie_files(m["path"], bool(m["single_folder"]))["nfo"], m["meta"])
-                st = paths.movie_status(m["path"], bool(m["single_folder"]))
-                db.update("movies", mid, **{k: int(v) for k, v in st.items()})
-                emby.touch(m["path"])
+                m = _finish_stack(mid)
                 db.log("INFO", f"Mehrteiler zusammengeführt: {os.path.basename(m['folder'])} ({len(m['part_files'])} Teile)")
                 changed = True
         _step()
     return changed
+
+
+def _finish_stack(mid):
+    """Nach dem Zusammenführen: NFO als movie.nfo neu schreiben, Statusflags, Server informieren."""
+    from . import nfo, paths
+    m = db.one("SELECT * FROM movies WHERE id=?", (mid,))
+    if m.get("meta"):
+        nfo.write_movie(paths.movie_files(m["path"], bool(m["single_folder"]))["nfo"], m["meta"])
+    st = paths.movie_status(m["path"], bool(m["single_folder"]))
+    db.update("movies", mid, **{k: int(v) for k, v in st.items()})
+    emby.touch(m["path"])
+    return m
+
+
+def job_merge(ids):
+    """Mehrere Filmeinträge (z. B. zwei CDs, die als getrennte Filme erkannt wurden) zu einem Film verschmelzen:
+    Dateien als <Name>-cd1/-cd2 in den Filmordner, übrige Einträge löschen, NFO neu schreiben."""
+    state["total"] = 1
+    try:
+        main, rest, parts = renamer.merge_prepare(ids)
+    except ValueError as e:
+        db.log("WARN", f"Verschmelzen abgebrochen: {e}")
+        return False
+    plan = renamer.plan_stack(main)
+    if plan:
+        plan["conflict"] = next((f"Ziel existiert bereits: {os.path.basename(d)}" for s, d in plan["parts"]
+                                 if os.path.exists(d) and os.path.normcase(s) != os.path.normcase(d)), None)
+        done, errors = renamer.apply([plan])
+        if not done:
+            db.log("WARN", "Verschmelzen fehlgeschlagen – nichts verändert: " + "; ".join(errors))
+            return False
+        extra = {k: main.get(k) for k in renamer.MERGE_FIELDS}      # ggf. Daten des zugeordneten Eintrags übernehmen
+        db.update("movies", main["id"], **extra)
+    else:
+        db.update("movies", main["id"], part_files=parts, path=parts[0], **{k: main.get(k) for k in renamer.MERGE_FIELDS})
+    for r in rest:
+        db.execute("DELETE FROM movies WHERE id=?", (r["id"],))
+    m = _finish_stack(main["id"])
+    db.log("INFO", f"Zu einem Film verschmolzen: {m.get('title') or m.get('guess_title')} ({len(parts)} Teile)")
+    _step()
+    return True
 
 
 def job_rename(plans):
