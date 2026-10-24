@@ -145,6 +145,13 @@ git pull
 docker compose up -d --build
 ```
 
+**Dateien überspringen:** Trailer, Teaser, Featurettes, Zwischendateien (`.part`, `.temp`) und **Samples** werden nie als Film
+oder Episode erfasst – auch nicht, wenn „Sample“ mitten im Namen steht und nur noch Release-Angaben folgen
+(`Show.S01E01.Sample.German.BDRip.XviD-GRP.avi`). Ordner namens `Sample`/`Samples`/`Extras` werden ohnehin ignoriert.
+Unter Einstellungen → Bibliotheken → „Dateien überspringen“ kannst du weitere Wörter eintragen (kommagetrennt, ganze Wörter,
+auch Wortgruppen wie `making of`). Beim nächsten Scan werden bereits erfasste Treffer aus Film- und Episodenliste entfernt.
+Die Dateien selbst werden nie angefasst. Titel wie „Sample People (2000)“ bleiben Filme.
+
 **Ausweichsuche (TVDB, AniList, Wikidata):** Findet TMDB einen Titel nicht sicher, fragt Scraparr nacheinander TVDB
 (Serien, Dokus), AniList (Anime, auch Romaji/Synonyme) und Wikidata (deutsche Bezeichnungen, z. B. TV-Dokus) und ordnet
 über deren IDs den TMDB-Eintrag zu (AniList über die Fribb-Anime-Liste, TVDB über `/find`). Die Daten selbst kommen weiter von

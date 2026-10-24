@@ -58,6 +58,18 @@ def cleanup_extras():
     return removed
 
 
+def cleanup_episode_extras():
+    """Bereits erfasste Samples/Zwischendateien (und per Einstellung ausgeschlossene Wörter) aus den Episoden entfernen."""
+    removed = 0
+    for r in db.query("SELECT id, path FROM episodes"):
+        if not parser.is_video(r["path"]):
+            db.execute("DELETE FROM episodes WHERE id=?", (r["id"],))
+            removed += 1
+    if removed:
+        db.log("INFO", f"{removed} Sample-/Zwischendateien aus der Episodenliste entfernt")
+    return removed
+
+
 def _merge_cd_dirs(found, root):
     """{ordner: [videos]} -> {ordner: [videos | ("cd", [teil1, teil2])]}.
     Film/CD1/x.avi + Film/CD2/y.avi werden als ein mehrteiliger Film dem Ordner "Film" zugeschlagen."""
@@ -310,6 +322,7 @@ def find_show_folders(root):
 
 def scan_shows(progress=None):
     seen_shows, seen_eps, new = set(), set(), 0
+    cleanup_episode_extras()
     for root in config.paths("tv_paths"):
         if not os.path.isdir(root):
             db.log("ERROR", f"Serienpfad nicht gefunden: {root}")

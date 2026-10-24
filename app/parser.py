@@ -66,12 +66,31 @@ def is_video(path: str) -> bool:
     return True
 
 
+# "Show.S01E01.Sample.German.BDRip.XviD-GRP": Sample mitten im Namen, danach nur noch Release-Angaben (und Gruppe)
+RELEASE_TAGS = (r"german|deutsch|english|dl|ml|ac3|dts|aac|eac3|xvid|divx|x26[45]|h26[45]|hevc|avc|bdrip|brrip|bluray|"
+                r"blu-ray|dvdrip|hdtv|webrip|web-dl|web|hd|uhd|remux|proper|repack|internal|(?:480|576|720|1080|2160)[pi]|4k|"
+                r"\d{1,2}|de|en")
+SAMPLE_RELEASE = re.compile(rf"[-_. \[(]sample[-_. \])]*(?:(?:{RELEASE_TAGS})[-_. \])]*)*(?:-[a-z0-9]+)?$", re.I)
+
+
+def extra_words():
+    """Zusätzliche Wörter aus den Einstellungen („Dateien überspringen“), die irgendwo im Dateinamen stehen dürfen."""
+    from . import config
+    return [w.strip().lower() for w in (config.get("skip_words") or "").split(",") if w.strip()]
+
+
 def is_extra_stem(stem: str) -> bool:
     """Trailer/Sample/Featurette am Anfang oder Ende des Namens (auch mit Zähler/Sprache dahinter)."""
     core = stem
     for _ in range(3):
         core = EXTRA_TAIL.sub("", core)
-    return bool(EXTRA_SUFFIX.search(stem) or TRAILER_END.search(core) or EXTRA_PREFIX.match(core))
+    if EXTRA_SUFFIX.search(stem) or TRAILER_END.search(core) or EXTRA_PREFIX.match(core) or SAMPLE_RELEASE.search(stem):
+        return True
+    words = extra_words()
+    if words:
+        norm = " " + re.sub(r"[^a-z0-9äöüß]+", " ", stem.lower()).strip() + " "
+        return any(" " + re.sub(r"[^a-z0-9äöüß]+", " ", w).strip() + " " in norm for w in words)
+    return False
 
 
 def mentions_trailer(path: str) -> bool:

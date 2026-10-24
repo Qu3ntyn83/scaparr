@@ -30,6 +30,7 @@ DEFAULTS = {
     # Bibliotheken (mehrere Pfade mit ; trennen)
     "movie_paths": os.environ.get("MOVIE_PATHS", "/media/filme"),
     "tv_paths": os.environ.get("TV_PATHS", "/media/serien"),
+    "skip_words": os.environ.get("SKIP_WORDS", ""),   # zusätzliche Wörter im Dateinamen, die nie als Film/Episode gelten
     "tv_ignore_folders": os.environ.get("TV_IGNORE_FOLDERS", ""),   # Ordnernamen, die nie als Serie gelten (kommagetrennt)
     # Sprache
     "language": os.environ.get("LANGUAGE", "de-DE"),
