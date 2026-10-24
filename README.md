@@ -145,6 +145,14 @@ git pull
 docker compose up -d --build
 ```
 
+**Ausweichsuche (TVDB, AniList, Wikidata):** Findet TMDB einen Titel nicht sicher, fragt Scraparr nacheinander TVDB
+(Serien, Dokus), AniList (Anime, auch Romaji/Synonyme) und Wikidata (deutsche Bezeichnungen, z. B. TV-Dokus) und ordnet
+über deren IDs den TMDB-Eintrag zu (AniList über die Fribb-Anime-Liste, TVDB über `/find`). Die Daten selbst kommen weiter von
+TMDB & Co. Ein Treffer gilt nur als sicher, wenn der Titel exakt übereinstimmt (und das Jahr passt); sonst erscheint er
+als Vorschlag in der manuellen Zuordnung. Abschaltbar unter Einstellungen → Ausweichsuche. AniList erlaubt derzeit etwa
+30 Anfragen pro Minute, Scraparr drosselt entsprechend. Titel, die es bei TMDB gar nicht gibt, bleiben weiterhin
+manuell (Stufe 2, noch nicht umgesetzt).
+
 **Warteschlange:** Startest du eine Aktion (Scrapen, Umbenennen, Verschmelzen, Scan …), während schon ein Lauf aktiv ist,
 wird sie eingereiht und automatisch danach ausgeführt – in der Reihenfolge, in der du sie gestartet hast. Die Statusleiste zeigt
 „+N in Warteschlange". Dieselbe Aufgabe wird nicht doppelt eingereiht. **✕ Abbrechen** stoppt den laufenden Job und leert die

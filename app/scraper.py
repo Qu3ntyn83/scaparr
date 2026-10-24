@@ -10,7 +10,7 @@ import unicodedata
 
 import httpx
 
-from . import parser, animelists, artpicker, artwork, config, db, emby, enrich, moviesets, nfo, paths, tmdb, tvdb
+from . import parser, resolvers, animelists, artpicker, artwork, config, db, emby, enrich, moviesets, nfo, paths, tmdb, tvdb
 
 
 # ---------------------------------------------------------------- Matching
@@ -372,6 +372,11 @@ def resolve_movie_id(m):
             results = results + [r for r in res if r["tmdb_id"] not in {x["tmdb_id"] for x in results}]
             if not hit and h:
                 hit = h
+    if not sure:
+        titles = [m["guess_title"]] + [a["title"] for a in parser.title_candidates(m["path"], bool(m.get("single_folder")))]
+        fb = resolvers.fallback("movie", titles, m["guess_year"])
+        if fb and (fb["sure"] or not hit):
+            return fb["tmdb_id"], fb["sure"], results
     return (hit["tmdb_id"] if hit else None), sure, results
 
 
@@ -459,6 +464,10 @@ def resolve_show_id(s):
         if r:
             return r[0]["id"], True
     hit, sure, _ = search_with_variants(tmdb.search_tv, s["guess_title"], s["guess_year"])
+    if not sure:
+        fb = resolvers.fallback("tv", [s["guess_title"]], s["guess_year"])
+        if fb and (fb["sure"] or not hit):
+            return fb["tmdb_id"], fb["sure"]
     return (hit["tmdb_id"] if hit else None), sure
 
 

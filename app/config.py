@@ -17,6 +17,7 @@ DEFAULTS = {
     "fernsehserien_enabled": os.environ.get("FERNSEHSERIEN_ENABLED", "true").lower() == "true",
     "fernsehserien_plots": True,             # auch deutsche Episodeninhalte übernehmen
     "ofdb_enabled": os.environ.get("OFDB_ENABLED", "true").lower() == "true",
+    "fallback_search": True,          # nicht gefundene Titel über TVDB/AniList/Wikidata zuordnen
     "wikidata_enabled": True,
     # Quellen-Logik
     "fsk_order": "ofdb,tmdb,wikidata",       # erste Quelle mit Treffer gewinnt

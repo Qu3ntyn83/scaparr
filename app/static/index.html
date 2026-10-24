@@ -197,6 +197,10 @@
           <div class="row"><button class="btn small ghost" type="button" data-test="animelists">Testen</button><span class="hint" data-res="animelists"></span></div>
         </div>
         <div class="src">
+          <div class="src-h"><b>Ausweichsuche</b><span>Titel, die TMDB nicht kennt (Anime, Dokus, TV-Produktionen)</span></div>
+          <label class="chk"><input type="checkbox" name="fallback_search"> Aktiv <small>(sucht dann bei TVDB, AniList und Wikidata und ordnet über deren IDs TMDB zu)</small></label>
+        </div>
+        <div class="src">
           <div class="src-h"><b>Wikidata</b><span>FSK-Freigabe und OFDb-Zuordnung (ohne Key)</span></div>
           <label class="chk"><input type="checkbox" name="wikidata_enabled"> Aktiv <small>(nötig, damit OFDb Filme findet)</small></label>
           <div class="row"><button class="btn small ghost" type="button" data-test="wikidata">Testen</button><span class="hint" data-res="wikidata"></span></div>
