@@ -145,6 +145,10 @@ table.list tr.active { background: var(--sel); }
 .ep .no { font-family: var(--mono); color: var(--muted); font-size: 12px; }
 .ep .tt { min-width: 0; }
 .ep .tt b { font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ep.bad .tt b { white-space: normal; word-break: break-all; }
+.ep.bad .tt span { white-space: normal; word-break: break-all; }
+.ep.bad .tt .why { color: var(--warn, #e0a33a); }
+.ep .tt .dim { opacity: .75; }
 .ep .tt span { color: var(--muted); font-size: 11.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- Seiten ---------- */

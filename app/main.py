@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import (animelists, arr, artpicker, config, db, emby, fanart, fernsehserien, jobs, moviesets, nfo, ofdb, omdb, paths, renamer,
+from . import (animelists, arr, artpicker, config, db, emby, fanart, fernsehserien, jobs, moviesets, nfo, ofdb, omdb, parser, paths, renamer,
                scraper, tmdb, trakt, tvdb, wikidata)
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -357,6 +357,14 @@ def show(sid: int):
                              "FROM episodes WHERE show_id=? ORDER BY season, path", (sid,))
     for e in s["episodes"]:
         e["thumb"] = paths.episode_files(e["path"])["thumb"]
+        e["rel"] = os.path.relpath(e["path"], s["folder"])
+        try:
+            st = os.stat(e["path"])
+            e["size"], e["mtime"] = st.st_size, int(st.st_mtime)
+        except OSError:
+            e["size"] = e["mtime"] = None            # Datei nicht erreichbar (z. B. Freigabe nicht eingehängt)
+        if not e.get("episodes"):                     # nicht erkannt -> zeigen, was gelesen wurde und was fehlt
+            e["diagnosis"] = parser.episode_diagnosis(e["path"], s["folder"])
     s["files"] = paths.show_files(s["folder"])
     return s
 

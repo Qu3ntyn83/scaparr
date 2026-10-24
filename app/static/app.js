@@ -390,6 +390,11 @@ function epSrc(e) {
   return src.length ? ` · deutsch via ${esc(src.join(" + "))}` : "";
 }
 
+function fmtSize(n) {
+  if (n == null) return "";
+  return n >= 1073741824 ? `${(n / 1073741824).toFixed(2)} GB` : n >= 1048576 ? `${Math.round(n / 1048576)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
 function renderEpisodes(d) {
   if (!d.episodes?.length) return `<h4>Episoden</h4><div class="hint">Keine Episoden gefunden.</div>`;
   const by = {};
@@ -402,10 +407,22 @@ function renderEpisodes(d) {
       ${eps.map((e) => {
         const no = e.episodes?.length ? `S${String(e.season).padStart(2, "0")}${e.episodes.map((n) => "E" + String(n).padStart(2, "0")).join("")}` : "??";
         const file = e.path.split("/").pop();
-        return `<div class="ep">
+        const bad = !e.episodes?.length;
+        const info = [fmtSize(e.size), e.mtime ? new Date(e.mtime * 1000).toLocaleDateString("de-DE") : "", e.size == null ? "Datei nicht erreichbar" : ""]
+          .filter(Boolean).join(" · ");
+        const dir = e.rel && e.rel.includes("/") ? e.rel.slice(0, e.rel.lastIndexOf("/")) : "";
+        const dg = e.diagnosis;
+        const read = dg && Object.keys(dg.gelesen).length ? Object.entries(dg.gelesen).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(" · ") : "";
+        return `<div class="ep ${bad ? "bad" : ""}" title="${esc(e.path)}">
           <div class="th" style="${e.has_thumb ? `background-image:url('${img(e.thumb, 240)}')` : ""}"></div>
           <div class="no">${no}</div>
-          <div class="tt"><b>${esc(e.title || "—")}</b><span>${esc(e.message || file)}${epSrc(e)}</span></div>
+          <div class="tt"><b>${esc(bad ? file : e.title || "—")}</b>
+            ${bad ? "" : `<span>${esc(e.message || file)}${epSrc(e)}</span>`}
+            ${bad ? `<span class="why">${esc(e.message || "Staffel/Episode nicht erkannt")}${dg?.fehlt?.length ? " – fehlt: " + esc(dg.fehlt.join(", ")) : ""}</span>
+              ${dir ? `<span>Ordner: ${esc(dir)}</span>` : ""}
+              ${info ? `<span>${esc(info)}</span>` : ""}
+              ${read ? `<span>Erkannt: ${read}</span>` : `<span>Aus dem Dateinamen wurde nichts gelesen</span>`}` : (info ? `<span class="dim">${esc(info)}</span>` : "")}
+          </div>
           <div>${dot(e.has_nfo)}</div></div>`;
       }).join("")}</div>`;
   }).join("");

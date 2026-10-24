@@ -253,6 +253,25 @@ def guess_episode(path: str, show_root: str):
     return None
 
 
+def episode_diagnosis(path: str, show_root: str):
+    """Was die Erkennung aus einem Dateinamen herausliest – zum Eingrenzen nicht erkannter Episoden.
+    -> {"gelesen": {...}, "fehlt": [...], "ordner": "Staffel 2"|None}"""
+    stem = os.path.splitext(os.path.basename(path))[0]
+    g = guessit(stem, {"type": "episode"})
+    labels = (("title", "Titel"), ("year", "Jahr"), ("season", "Staffel"), ("episode", "Episode"),
+              ("episode_title", "Episodentitel"), ("date", "Datum"), ("source", "Quelle"),
+              ("screen_size", "Auflösung"), ("release_group", "Gruppe"), ("language", "Sprache"))
+    read = {}
+    for key, label in labels:
+        v = g.get(key)
+        if v not in (None, "", []):
+            read[label] = ", ".join(str(x) for x in v) if isinstance(v, list) else str(v)
+    rel = os.path.relpath(os.path.dirname(path), show_root)
+    folder = None if rel == "." else rel
+    missing = [lab for k, lab in (("season", "Staffel"), ("episode", "Episode")) if g.get(k) is None]
+    return {"gelesen": read, "fehlt": missing, "ordner": folder}
+
+
 def read_nfo_ids(nfo_path: str) -> dict:
     """IDs aus vorhandener NFO lesen (tMM/Kodi/Emby) – übernimmt bestehende Zuordnungen."""
     ids = {}
