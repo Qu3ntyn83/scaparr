@@ -145,6 +145,11 @@ git pull
 docker compose up -d --build
 ```
 
+**Episoden-Erkennung:** Neben `S01E02` und `1x02` werden auch wörtliche Angaben gelesen: `Charmed_-_6_Staffel_-_Epi21`,
+`Staffel 6 - Folge 21`, `6. Staffel 21. Folge`, `Season 6 Episode 21`, `Folge 21-22` (Doppelfolge), `Ep21` (Staffel dann aus dem
+Staffelordner, sonst 1). Bisher „nicht erkannte“ Episoden werden beim nächsten Scan neu geprüft und – falls jetzt erkannt –
+zum Scrapen vorgemerkt. Nach dem Scrapen benennt **Umbenennen** sie nach deinem Muster um (Standard: `Serie - S06E21 - Titel`).
+
 **Dateien überspringen:** Trailer, Teaser, Featurettes, Zwischendateien (`.part`, `.temp`) und **Samples** werden nie als Film
 oder Episode erfasst – auch nicht, wenn „Sample“ mitten im Namen steht und nur noch Release-Angaben folgen
 (`Show.S01E01.Sample.German.BDRip.XviD-GRP.avi`). Ordner namens `Sample`/`Samples`/`Extras` werden ohnehin ignoriert.

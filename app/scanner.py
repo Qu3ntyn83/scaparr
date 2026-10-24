@@ -230,10 +230,18 @@ def _scan_show_folder(folder, seen_eps, progress=None):
         for v in vids:
             seen_eps.add(v)
             est = paths.episode_status(v)
-            ep = db.one("SELECT id, status FROM episodes WHERE path=?", (v,))
+            ep = db.one("SELECT id, status, season, episodes FROM episodes WHERE path=?", (v,))
             if ep:
+                fix = {}
+                if ep["status"] == "fehler" and ep["season"] is None and not ep["episodes"]:
+                    g = parser.guess_episode(v, folder)          # bisher nicht erkannt: mit aktueller Erkennung neu versuchen
+                    if g:
+                        fix = {"season": g["season"], "episodes": g["episodes"], "status": "neu", "message": None}
+                        db.execute("UPDATE shows SET status='neu' WHERE id=? AND status='gescrapt'", (sid,))
+                        db.log("INFO", f"Episode jetzt erkannt: {os.path.basename(v)} → S{g['season']:02d}"
+                                       f"E{g['episodes'][0]:02d}")
                 db.update("episodes", ep["id"], missing=0, show_id=sid,
-                          **{k: int(x) for k, x in est.items()})
+                          **{k: int(x) for k, x in est.items()}, **fix)
                 continue
             g = parser.guess_episode(v, folder)
             if g:

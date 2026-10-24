@@ -235,6 +235,13 @@ SPECIAL_DIRS = {"specials", "special", "season 0", "staffel 0"}
 def is_season_dir(name):
     n = name.strip()
     return bool(SEASON_DIR.match(n)) or n.lower() in SPECIAL_DIRS
+# Wörtliche Angaben: "6_Staffel_-_Epi21", "Staffel 6 - Folge 21", "6. Staffel 21. Folge", "Season 6 Episode 21", "Ep21"
+_SEASON_W = r"(?:Staffel|Season|Saison|Series|Serie)"
+_EP_W = r"(?:Episode|Epi|Folge|Fol|Ep)"
+SEASON_BEFORE = re.compile(rf"(?<![A-Za-z]){_SEASON_W}[ ._-]*(\d{{1,2}})(?!\d)", re.I)
+SEASON_AFTER = re.compile(rf"(?<!\d)(\d{{1,2}})\.?[ ._-]*{_SEASON_W}(?![A-Za-z])", re.I)
+EP_BEFORE = re.compile(rf"(?<![A-Za-z]){_EP_W}\.?[ ._-]*(\d{{1,4}})(?:[ ._]*[-&+][ ._]*(\d{{1,4}}))?(?!\d)", re.I)
+EP_AFTER = re.compile(rf"(?<!\d)(\d{{1,4}})\.?[ ._-]*{_EP_W}(?![A-Za-z])", re.I)
 SXXEYY = re.compile(r"[Ss](\d{1,3})[ ._-]?[Ee](\d{1,4})((?:[ ._-]?[Ee-]\d{1,4})*)")
 NXNN = re.compile(r"(?<!\d)(\d{1,2})x(\d{2,3})(?!\d)")
 
@@ -261,6 +268,20 @@ def guess_episode(path: str, show_root: str):
     m = NXNN.search(stem)
     if m:
         return {"season": int(m.group(1)), "episodes": [int(m.group(2))]}
+    me = EP_BEFORE.search(stem) or EP_AFTER.search(stem)
+    if me:                                              # "Epi21", "21. Folge", "Folge 21-22"
+        # dieselbe Zahl kann nicht Staffel und Episode sein ("6. Staffel 21. Folge": "Staffel 21" ist keine Staffel)
+        ms = next((m for m in (SEASON_BEFORE.search(stem), SEASON_AFTER.search(stem))
+                   if m and m.span(1) != me.span(1)), None)
+        first = int(me.group(1))
+        last = int(me.group(2)) if me.lastindex and me.lastindex >= 2 and me.group(2) else None
+        eps = list(range(first, last + 1)) if last and first < last <= first + 10 else [first]
+        sn = int(ms.group(1)) if ms else season          # sonst Staffelordner
+        if sn is None:
+            g0 = guessit(stem, {"type": "episode"})
+            sn = g0.get("season")
+            sn = sn[0] if isinstance(sn, list) else sn
+        return {"season": int(sn) if sn is not None else 1, "episodes": eps}
     g = guessit(stem, {"type": "episode"})
     ep = g.get("episode")
     if ep is not None:
